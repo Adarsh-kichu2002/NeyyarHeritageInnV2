@@ -214,15 +214,15 @@ class MoneyReportScreen extends StatelessWidget {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       columns: const [
-                        DataColumn(label: Text("Sl")),
-                        DataColumn(label: Text("Invoice")),
-                        DataColumn(label: Text("Customer")),
-                        DataColumn(label: Text("Date")),
-                        DataColumn(label: Text("Advance")),
-                        DataColumn(label: Text("GPay")),
-                        DataColumn(label: Text("Cash")),
-                        DataColumn(label: Text("Account")),
-                        DataColumn(label: Text("Total")),
+                        DataColumn(label: Text("Sl", style: TextStyle(fontWeight: FontWeight.bold,),)),
+                        DataColumn(label: Text("Invoice", style: TextStyle(fontWeight: FontWeight.bold,),)),
+                        DataColumn(label: Text("Customer", style: TextStyle(fontWeight: FontWeight.bold,),)),
+                        DataColumn(label: Text("Date", style: TextStyle(fontWeight: FontWeight.bold,),)),
+                        DataColumn(label: Text("Advance", style: TextStyle(fontWeight: FontWeight.bold,),)),
+                        DataColumn(label: Text("GPay", style: TextStyle(fontWeight: FontWeight.bold,),)),
+                        DataColumn(label: Text("Cash", style: TextStyle(fontWeight: FontWeight.bold,),)),
+                        DataColumn(label: Text("Account", style: TextStyle(fontWeight: FontWeight.bold,),)),
+                        DataColumn(label: Text("Total", style: TextStyle(fontWeight: FontWeight.bold,),)),
                       ],
                       rows: List.generate(monthBills.length, (index) {
                         final bill = monthBills[index];

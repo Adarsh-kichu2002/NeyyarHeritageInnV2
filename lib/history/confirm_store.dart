@@ -18,19 +18,14 @@ class ConfirmStore extends ChangeNotifier {
 
   /// 🔍 CHECK IF ALREADY CONFIRMED
   bool isConfirmed(String quotationId) {
-    return _confirmed.any(
-      (q) => q['originalQuotationId'] == quotationId,
-    );
+    return _confirmed.any((q) => q['originalQuotationId'] == quotationId);
   }
 
   /// 🔥 REAL-TIME LISTENER
   /// 1️⃣ AUTO REMOVE AFTER CHECKOUT DAY ENDS
   /// 2️⃣ SORT BY NEAREST CHECK-IN DATE
   void fetchConfirmed() {
-    _db
-        .collection('confirmed_quotations')
-        .snapshots()
-        .listen((snapshot) async {
+    _db.collection('confirmed_quotations').snapshots().listen((snapshot) async {
       final now = DateTime.now();
 
       DateTime? parseDate(dynamic value) {
@@ -49,14 +44,17 @@ class ConfirmStore extends ChangeNotifier {
 
         /// 🔥 AUTO DELETE ONLY FROM confirmed_quotations
         if (checkOut != null) {
-          final checkoutEnd =
-              DateTime(checkOut.year, checkOut.month, checkOut.day, 23, 59, 59);
+          final checkoutEnd = DateTime(
+            checkOut.year,
+            checkOut.month,
+            checkOut.day,
+            23,
+            59,
+            59,
+          );
 
           if (now.isAfter(checkoutEnd)) {
-            await _db
-                .collection('confirmed_quotations')
-                .doc(doc.id)
-                .delete();
+            await _db.collection('confirmed_quotations').doc(doc.id).delete();
             continue; // skip adding
           }
         }
@@ -89,7 +87,7 @@ class ConfirmStore extends ChangeNotifier {
           'createdAt': parseDate(data['createdAt']),
           'confirmedAt': parseDate(data['confirmedAt']),
           'billGenerated': data['billGenerated'] ?? false,
-'billId': data['billId'],
+          'billId': data['billId'],
         });
       }
 
@@ -136,8 +134,8 @@ class ConfirmStore extends ChangeNotifier {
           ? Timestamp.fromDate(q['checkOutDate'])
           : q['checkOutDate'],
 
-          'checkInTime': q['checkInTime'] ?? '',
-          'checkOutTime': q['checkOutTime'] ?? '',
+      'checkInTime': q['checkInTime'] ?? '',
+      'checkOutTime': q['checkOutTime'] ?? '',
 
       'adult': q['adult'] ?? 0,
       'children': q['children'] ?? 0,
@@ -157,9 +155,9 @@ class ConfirmStore extends ChangeNotifier {
           ? Timestamp.fromDate(q['createdAt'])
           : q['createdAt'],
 
-          // Bill status
-'billGenerated': false,
-'billId': null,
+      // Bill status
+      'billGenerated': false,
+      'billId': null,
 
       'confirmedAt': FieldValue.serverTimestamp(),
     });
@@ -167,7 +165,8 @@ class ConfirmStore extends ChangeNotifier {
 
   /// 🔁 SYNC AFTER QUOTATION EDIT
   Future<void> syncAfterQuotationUpdate(
-      Map<String, dynamic> updatedQuotation) async {
+    Map<String, dynamic> updatedQuotation,
+  ) async {
     final String quotationId = updatedQuotation['id'];
 
     final query = await _db
@@ -180,11 +179,12 @@ class ConfirmStore extends ChangeNotifier {
 
     final docId = query.docs.first.id;
 
-    await _db.collection('confirmed_quotations').doc(docId).update({
+    final dataToUpdate = {
       'customerName': updatedQuotation['customerName'],
       'phone1': updatedQuotation['phone1'],
       'phone2': updatedQuotation['phone2'] ?? '',
-      'advance': updatedQuotation['advance'] ?? 0,
+      if (updatedQuotation.containsKey('advance'))
+        'advance': updatedQuotation['advance'] ?? 0,
       'address': updatedQuotation['address'] ?? '',
       'package': updatedQuotation['package'],
       'checkInDate': updatedQuotation['checkInDate'] is DateTime
@@ -193,8 +193,8 @@ class ConfirmStore extends ChangeNotifier {
       'checkOutDate': updatedQuotation['checkOutDate'] is DateTime
           ? Timestamp.fromDate(updatedQuotation['checkOutDate'])
           : updatedQuotation['checkOutDate'],
-          'checkInTime': updatedQuotation['checkInTime'] ?? '',
-          'checkOutTime': updatedQuotation['checkOutTime'] ?? '',
+      'checkInTime': updatedQuotation['checkInTime'] ?? '',
+      'checkOutTime': updatedQuotation['checkOutTime'] ?? '',
       'totalPax': updatedQuotation['totalPax'] ?? 0,
       'discount': updatedQuotation['discount'] ?? 0,
       'extraPersons': updatedQuotation['extraPersons'] ?? 0,
@@ -204,7 +204,12 @@ class ConfirmStore extends ChangeNotifier {
       'total': updatedQuotation['total'] ?? 0,
       'facilities': updatedQuotation['facilities'] ?? [],
       'rooms': updatedQuotation['rooms'] ?? [],
-    });
+    };
+
+    await _db
+        .collection('confirmed_quotations')
+        .doc(docId)
+        .update(dataToUpdate);
   }
 
   /// ❌ REMOVE IF QUOTATION HISTORY DELETES
@@ -223,16 +228,14 @@ class ConfirmStore extends ChangeNotifier {
   Future<void> deleteConfirmed(String confirmId) async {
     await _db.collection('confirmed_quotations').doc(confirmId).delete();
   }
+
   Future<void> markBillGenerated({
-  required String confirmId,
-  required String billId,
-}) async {
-  await _db
-      .collection('confirmed_quotations')
-      .doc(confirmId)
-      .update({
-    'billGenerated': true,
-    'billId': billId,
-  });
-}
+    required String confirmId,
+    required String billId,
+  }) async {
+    await _db.collection('confirmed_quotations').doc(confirmId).update({
+      'billGenerated': true,
+      'billId': billId,
+    });
+  }
 }

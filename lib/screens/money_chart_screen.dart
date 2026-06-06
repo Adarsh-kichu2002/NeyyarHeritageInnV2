@@ -316,23 +316,37 @@ class MoneyChartScreen extends StatelessWidget {
                   columns: const [
                     DataColumn(
                       label:
-                          Text('Date'),
+                          Text('Date',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                      ),
                     ),
                     DataColumn(
                       label: Text(
-                          'Advance'),
+                          'Advance',
+                           style: TextStyle(
+                    fontWeight: FontWeight.bold,),
+                    ),
                     ),
                     DataColumn(
                       label:
-                          Text('GPay'),
+                          Text('GPay'
+                          , style: TextStyle(
+                    fontWeight: FontWeight.bold,),
+                          ),
                     ),
                     DataColumn(
                       label:
-                          Text('Cash'),
+                          Text('Cash', style: TextStyle(
+                    fontWeight: FontWeight.bold,),
+                          ),
                     ),
                     DataColumn(
                       label: Text(
-                          'Account'),
+                          'Account', style: TextStyle(
+                    fontWeight: FontWeight.bold,),),
                     ),
                   ],
                   rows: entry.value

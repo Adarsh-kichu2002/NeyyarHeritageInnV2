@@ -11,43 +11,40 @@ class CreateQuotationScreen extends StatefulWidget {
 class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   final _formKey = GlobalKey<FormState>();
 
-Map<String, dynamic>? editData;
-String? quotationId;
-bool isEdit = false;
+  Map<String, dynamic>? editData;
+  String? quotationId;
+  bool isEdit = false;
 
   String mode = 'create';
   late Map<String, dynamic> data;
-  
+
   List<dynamic> rooms = [];
   List<dynamic> facilities = [];
 
   DateTime? _tsToDate(dynamic value) {
-  if (value == null) return null;
-  if (value is DateTime) return value;
+    if (value == null) return null;
+    if (value is DateTime) return value;
 
-  // Firestore Timestamp
-  if (value.runtimeType.toString() == 'Timestamp') {
-    return value.toDate();
+    // Firestore Timestamp
+    if (value.runtimeType.toString() == 'Timestamp') {
+      return value.toDate();
+    }
+
+    return null;
   }
-
-  return null;
-}
 
   TimeOfDay? _stringToTime(dynamic value) {
-  if (value == null) return null;
+    if (value == null) return null;
 
-  if (value is TimeOfDay) return value;
+    if (value is TimeOfDay) return value;
 
-  if (value is String && value.contains(':')) {
-    final parts = value.split(':');
-    return TimeOfDay(
-      hour: int.parse(parts[0]),
-      minute: int.parse(parts[1]),
-    );
+    if (value is String && value.contains(':')) {
+      final parts = value.split(':');
+      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    }
+
+    return null;
   }
-
-  return null;
-}
 
   String _selectedPackage = 'Day Out Package';
   final List<String> _packages = [
@@ -63,8 +60,8 @@ bool isEdit = false;
   DateTime? _checkInDate;
   DateTime? _checkOutDate;
 
-  TimeOfDay? _checkInTime = const TimeOfDay(hour: 12, minute: 0);   
-  TimeOfDay? _checkOutTime = const TimeOfDay(hour: 10, minute: 30); 
+  TimeOfDay? _checkInTime = const TimeOfDay(hour: 12, minute: 0);
+  TimeOfDay? _checkOutTime = const TimeOfDay(hour: 10, minute: 30);
 
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phone1Controller = TextEditingController();
@@ -76,12 +73,12 @@ bool isEdit = false;
   final TextEditingController _childController = TextEditingController();
 
   int get totalPax {
-  final adult = int.tryParse(_adultController.text) ?? 0;
-  final children = int.tryParse(_childrenController.text) ?? 0;
-  final child = int.tryParse(_childController.text) ?? 0;
+    final adult = int.tryParse(_adultController.text) ?? 0;
+    final children = int.tryParse(_childrenController.text) ?? 0;
+    final child = int.tryParse(_childController.text) ?? 0;
 
-  return adult + children + child;
-}
+    return adult + children + child;
+  }
 
   Future<void> _pickDate({required bool isCheckIn}) async {
     final picked = await showDatePicker(
@@ -123,66 +120,62 @@ bool isEdit = false;
 
   String _formatTime(TimeOfDay? time) =>
       time == null ? '' : time.format(context);
-  
-  
-@override
-void didChangeDependencies() {
-  super.didChangeDependencies();
 
-  if (editData != null) return; // prevent duplicate execution
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
 
-  final args = ModalRoute.of(context)?.settings.arguments;
+    if (editData != null) return; // prevent duplicate execution
 
-  if (args != null && args is Map<String, dynamic>) {
-    mode = 'edit';
-    editData = args;
-    quotationId = args['id']; // MUST be original quotation id
-    _fillFormForEdit();
-  } else {
-    mode = 'create';
+    final args = ModalRoute.of(context)?.settings.arguments;
+
+    if (args != null && args is Map<String, dynamic>) {
+      mode = 'edit';
+      editData = args;
+      quotationId = args['id']; // MUST be original quotation id
+      _fillFormForEdit();
+    } else {
+      mode = 'create';
+    }
   }
-}
 
+  void _fillFormForEdit() {
+    if (editData == null) return;
 
-   void _fillFormForEdit() {
-  if (editData == null) return;
+    _nameController.text = editData!['customerName'] ?? '';
+    _phone1Controller.text = editData!['phone1'] ?? '';
+    _phone2Controller.text = editData!['phone2'] ?? '';
+    _addressController.text = editData!['address'] ?? '';
 
-  _nameController.text = editData!['customerName'] ?? '';
-  _phone1Controller.text = editData!['phone1'] ?? '';
-  _phone2Controller.text = editData!['phone2'] ?? '';
-  _addressController.text = editData!['address'] ?? '';
-
-  final savedPackage = editData!['package'] ?? '';
-  if (_packages.contains(savedPackage)) {
+    final savedPackage = editData!['package'] ?? '';
+    if (_packages.contains(savedPackage)) {
       _selectedPackage = savedPackage;
     } else {
       _selectedPackage = 'Add New Package';
       _customPackageController.text = savedPackage;
     }
 
-  rooms = List.from(editData!['rooms'] ?? []);
-  facilities = List.from(editData!['facilities'] ?? []);
+    rooms = List.from(editData!['rooms'] ?? []);
+    facilities = List.from(editData!['facilities'] ?? []);
 
-  _checkInDate = _tsToDate(editData!['checkInDate']);
-  _checkOutDate = _tsToDate(editData!['checkOutDate']);
+    _checkInDate = _tsToDate(editData!['checkInDate']);
+    _checkOutDate = _tsToDate(editData!['checkOutDate']);
 
-  _checkInTime = _stringToTime(editData!['checkInTime']);
-  _checkOutTime = _stringToTime(editData!['checkOutTime']);
+    _checkInTime = _stringToTime(editData!['checkInTime']);
+    _checkOutTime = _stringToTime(editData!['checkOutTime']);
 
-  _adultController.text = editData?['adult']?.toString() ?? '';
-  _childrenController.text = editData?['children']?.toString() ?? '';
-  _childController.text = editData?['child']?.toString() ?? '';
+    _adultController.text = editData?['adult']?.toString() ?? '';
+    _childrenController.text = editData?['children']?.toString() ?? '';
+    _childController.text = editData?['child']?.toString() ?? '';
 
-  setState(() {});
-}
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(mode == 'edit'
-            ? 'Edit Quotation'
-            : 'Create Quotation'),
+        title: Text(mode == 'edit' ? 'Edit Quotation' : 'Create Quotation'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -193,46 +186,41 @@ void didChangeDependencies() {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 /// PACKAGE DROPDOWN
-               DropdownButtonFormField<String>(
-                value: _packages.contains(_selectedPackage)
-                    ? _selectedPackage
-                    : null,
-                decoration: const InputDecoration(
-                  labelText: 'Package',
-                  border: OutlineInputBorder(),
+                DropdownButtonFormField<String>(
+                  value: _packages.contains(_selectedPackage)
+                      ? _selectedPackage
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: 'Package',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _packages
+                      .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                      .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedPackage = value!;
+                      if (_selectedPackage == 'Day Out Package' &&
+                          _checkInDate != null) {
+                        _checkOutDate = _checkInDate;
+                      }
+                    });
+                  },
                 ),
-                items: _packages
-                    .map(
-                      (e) => DropdownMenuItem(
-                        value: e,
-                        child: Text(e),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedPackage = value!;
-                    if (_selectedPackage == 'Day Out Package' &&
-                        _checkInDate != null) {
-                      _checkOutDate = _checkInDate;
-                    }
-                  });
-                },
-              ),
 
-              if (_selectedPackage == 'Add New Package')
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: TextFormField(
-                    controller: _customPackageController,
-                    decoration: const InputDecoration(
-                      labelText: 'Enter Package Name',
-                      border: OutlineInputBorder(),
+                if (_selectedPackage == 'Add New Package')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: TextFormField(
+                      controller: _customPackageController,
+                      decoration: const InputDecoration(
+                        labelText: 'Enter Package Name',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
-                ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
                 /// CHECK IN / OUT
                 Row(
@@ -314,38 +302,40 @@ void didChangeDependencies() {
 
                 /// NEXT BUTTON
                 ElevatedButton(
-  onPressed: () {
-    if (_formKey.currentState!.validate()) {
-      Navigator.pushNamed(
-  context,
-  '/room_select_screen',
-  arguments: {
-    'mode': mode,
-    'quotationId': mode == 'edit' ? quotationId : null,
-    'package': _selectedPackage == 'Add New Package'
-        ? _customPackageController.text
-        : _selectedPackage,
-    'checkInDate': _checkInDate,
-    'checkOutDate': _checkOutDate,
-    'checkInTime': _checkInTime,
-    'checkOutTime': _checkOutTime,
-    'customerName': _nameController.text,
-    'phone1': _phone1Controller.text,
-    'phone2': _phone2Controller.text,
-    'address': _addressController.text,
-    'adult': _adultController.text,
-    'children': _childrenController.text,
-    'child': _childController.text,
-    'totalPax': totalPax,
-    'rooms': rooms,
-    'facilities': facilities,
-  },
-);
-
-    }
-  },
-  child: const Text('Next'),
-)
+                  onPressed: () {
+                    if (_formKey.currentState!.validate()) {
+                      Navigator.pushNamed(
+                        context,
+                        '/room_select_screen',
+                        arguments: {
+                          'mode': mode,
+                          'quotationId': mode == 'edit' ? quotationId : null,
+                          'package': _selectedPackage == 'Add New Package'
+                              ? _customPackageController.text
+                              : _selectedPackage,
+                          'checkInDate': _checkInDate,
+                          'checkOutDate': _checkOutDate,
+                          'checkInTime': _checkInTime,
+                          'checkOutTime': _checkOutTime,
+                          'customerName': _nameController.text,
+                          'phone1': _phone1Controller.text,
+                          'phone2': _phone2Controller.text,
+                          'address': _addressController.text,
+                          'advance': mode == 'edit'
+                              ? (editData?['advance'] ?? 0)
+                              : 0,
+                          'adult': _adultController.text,
+                          'children': _childrenController.text,
+                          'child': _childController.text,
+                          'totalPax': totalPax,
+                          'rooms': rooms,
+                          'facilities': facilities,
+                        },
+                      );
+                    }
+                  },
+                  child: const Text('Next'),
+                ),
               ],
             ),
           ),
@@ -376,14 +366,18 @@ void didChangeDependencies() {
       controller: controller,
       validator: (v) => v!.isEmpty ? 'Required' : null,
       decoration: InputDecoration(
-        labelText: '$label *',iconColor: Colors.red,
+        labelText: '$label *',
+        iconColor: Colors.red,
         border: const OutlineInputBorder(),
       ),
     );
   }
 
-  Widget _optionalField(TextEditingController controller, String label,
-      {int maxLines = 1}) {
+  Widget _optionalField(
+    TextEditingController controller,
+    String label, {
+    int maxLines = 1,
+  }) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
@@ -394,23 +388,23 @@ void didChangeDependencies() {
     );
   }
 
- Widget _paxBox(TextEditingController controller, String label) {
-  return Expanded(
-    child: TextField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      textAlign: TextAlign.center,
-      decoration: InputDecoration(
-        labelText: label, // Adult / Children / Child
-        floatingLabelBehavior: FloatingLabelBehavior.always,
-        border: const OutlineInputBorder(),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 14,
-          horizontal: 8,
+  Widget _paxBox(TextEditingController controller, String label) {
+    return Expanded(
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        decoration: InputDecoration(
+          labelText: label, // Adult / Children / Child
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 14,
+            horizontal: 8,
+          ),
         ),
+        onChanged: (_) => setState(() {}),
       ),
-      onChanged: (_) => setState(() {}),
-    ),
-  );
-}
+    );
+  }
 }
