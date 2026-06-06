@@ -88,6 +88,8 @@ class ConfirmStore extends ChangeNotifier {
           'facilities': data['facilities'] ?? [],
           'createdAt': parseDate(data['createdAt']),
           'confirmedAt': parseDate(data['confirmedAt']),
+          'billGenerated': data['billGenerated'] ?? false,
+'billId': data['billId'],
         });
       }
 
@@ -155,6 +157,10 @@ class ConfirmStore extends ChangeNotifier {
           ? Timestamp.fromDate(q['createdAt'])
           : q['createdAt'],
 
+          // Bill status
+'billGenerated': false,
+'billId': null,
+
       'confirmedAt': FieldValue.serverTimestamp(),
     });
   }
@@ -217,4 +223,16 @@ class ConfirmStore extends ChangeNotifier {
   Future<void> deleteConfirmed(String confirmId) async {
     await _db.collection('confirmed_quotations').doc(confirmId).delete();
   }
+  Future<void> markBillGenerated({
+  required String confirmId,
+  required String billId,
+}) async {
+  await _db
+      .collection('confirmed_quotations')
+      .doc(confirmId)
+      .update({
+    'billGenerated': true,
+    'billId': billId,
+  });
+}
 }

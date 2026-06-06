@@ -2,9 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:neyyar_heritage/screens/money_chart_screen.dart';
+import 'package:neyyar_heritage/screens/money_report_screen.dart';
 import 'package:provider/provider.dart';
 
-import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'package:printing/printing.dart';
@@ -185,9 +186,41 @@ class _ReportsScreenState extends State<ReportsScreen> {
       backgroundColor: Colors.white,
 
       appBar: AppBar(
-        title: const Text("Reports"),
-      ),
+  title: const Text("Reports"),
+  actions: [
+    PopupMenuButton<String>(
+      onSelected: (value) {
+        if (value == 'money_page') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MoneyReportScreen(),
+            ),
+          );
+        }
 
+        if (value == 'money_chart') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MoneyChartScreen(),
+            ),
+          );
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: 'money_page',
+          child: Text('Money Page'),
+        ),
+        const PopupMenuItem(
+          value: 'money_chart',
+          child: Text('Money Chart'),
+        ),
+      ],
+    ),
+  ],
+),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(12),
         child: ElevatedButton.icon(

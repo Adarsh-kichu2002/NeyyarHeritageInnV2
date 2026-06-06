@@ -23,6 +23,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final gpayCtrl = TextEditingController(text: '0');
   final cashCtrl = TextEditingController(text: '0');
   final accountCtrl = TextEditingController(text: '0');
+  final paymentRecordedByCtrl = TextEditingController();
 
   int _toInt(dynamic v) => int.tryParse(v?.toString() ?? '') ?? 0;
 
@@ -45,6 +46,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
       gpayCtrl.text = _toInt(payment['gpay']).toString();
       cashCtrl.text = _toInt(payment['cash']).toString();
       accountCtrl.text = _toInt(payment['account']).toString();
+      paymentRecordedByCtrl.text =
+      payment['paymentRecordedBy']?.toString() ?? '';
+
     }
   }
 
@@ -85,7 +89,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
      // );
       // return;
    // }
-
+     if (paymentRecordedByCtrl.text.trim().isEmpty) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Payment Recorded By is required'),
+    ),
+  );
+  return;
+}
     setState(() => _saving = true);
 
     final billId = data['billId'];
@@ -95,6 +106,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       'cash': _toInt(cashCtrl.text),
       'account': _toInt(accountCtrl.text),
       'paidAmount': paidAmount,
+      'paymentRecordedBy': paymentRecordedByCtrl.text.trim(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -176,7 +188,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
             _paymentField('Cash', cashCtrl),
             _paymentField('Account', accountCtrl),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+
+TextField(
+  controller: paymentRecordedByCtrl,
+  enabled: canEdit,
+  decoration: const InputDecoration(
+    labelText: 'Payment Recorded By *',
+    border: OutlineInputBorder(),
+  ),
+),
 
             /// VALIDATION
             // Align(
@@ -251,6 +272,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     gpayCtrl.dispose();
     cashCtrl.dispose();
     accountCtrl.dispose();
+    paymentRecordedByCtrl.dispose();
     super.dispose();
   }
 }

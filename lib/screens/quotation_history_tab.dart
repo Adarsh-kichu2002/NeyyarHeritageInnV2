@@ -128,7 +128,7 @@ class _QuotationHistoryTabState
           text: (q['advance'] ?? 0).toString());
 
   return DataRow(
-    color: MaterialStateProperty.resolveWith<Color?>(
+    color: WidgetStateProperty.resolveWith<Color?>(
       (states) {
         if (isConfirmed) {
           return Colors.yellow.shade700;

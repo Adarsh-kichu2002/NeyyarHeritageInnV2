@@ -34,6 +34,8 @@ import 'screens/room_occupancy_screen.dart';
 import 'screens/room_chart.dart';
 
 import 'screens/reports_screen.dart';
+import 'screens/money_chart_screen.dart';
+import 'screens/money_report_screen.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -122,6 +124,8 @@ class MyApp extends StatelessWidget {
         '/room_chart': (_) => const RoomChartScreen(),
 
         '/reports_screen': (_) => const ReportsScreen(),
+        '/money_chart': (_) => const MoneyChartScreen(),
+        '/money_report': (_) => const MoneyReportScreen(),
       },
     );
   }

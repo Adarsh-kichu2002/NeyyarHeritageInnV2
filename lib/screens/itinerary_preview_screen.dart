@@ -652,7 +652,7 @@ Future<Uint8List> _buildExactPdf(
       ),
     ],
   );
-}).toList(),
+}),
 
 pw.SizedBox(height: 20),
 

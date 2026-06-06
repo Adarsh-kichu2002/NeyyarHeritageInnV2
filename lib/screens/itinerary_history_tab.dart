@@ -169,7 +169,7 @@ class ItineraryHistoryTab extends StatelessWidget {
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),

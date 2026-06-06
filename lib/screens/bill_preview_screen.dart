@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../history/bill_history_store.dart';
+import '../history/confirm_store.dart';
 
 class BillPreviewScreen extends StatefulWidget {
   const BillPreviewScreen({super.key});
@@ -17,7 +18,11 @@ class BillPreviewScreen extends StatefulWidget {
 
 class _BillPreviewScreenState extends State<BillPreviewScreen> {
   final Color green = const Color.fromARGB(255, 52, 191, 59);
+
   bool _saving = false;
+
+  /// Prevent double-click only while this screen is open
+  bool _savedInThisSession = false;
 
   int _toInt(dynamic v) => int.tryParse(v?.toString() ?? '') ?? 0;
 
@@ -223,29 +228,47 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
       ),
     );
   }
-
-  /// ---------------- ACTIONS ----------------
+ // Actions like Save & Download PDF
 Widget _actions(BuildContext context, Map<String, dynamic> data) {
+  final bool isViewOnly = data['isViewOnly'] == true;
+
   return Padding(
     padding: const EdgeInsets.all(12),
     child: Row(
       children: [
         Expanded(
           child: ElevatedButton.icon(
-            icon: const Icon(Icons.save),
-            label: Text(_saving ? 'Saving...' : 'Save & Download'),
-            onPressed: _saving
+            icon: Icon(
+              (isViewOnly || _savedInThisSession)
+                  ? Icons.check_circle
+                  : Icons.save,
+            ),
+            label: Text(
+              isViewOnly
+                  ? 'Saved'
+                  : _savedInThisSession
+                      ? 'Saved'
+                      : (_saving
+                          ? 'Saving...'
+                          : 'Save & Download'),
+            ),
+            onPressed: (isViewOnly ||
+                    _saving ||
+                    _savedInThisSession)
                 ? null
                 : () async {
-                    setState(() => _saving = true);
+                    setState(() {
+                      _saving = true;
+                    });
 
-                    // ✅ Generate bill ID if not exists
                     final billId = data['billId'] ??
-                        DateTime.now().millisecondsSinceEpoch.toString();
+                        DateTime.now()
+                            .millisecondsSinceEpoch
+                            .toString();
 
-                    /// 🔥 CLEAN ITEMS BEFORE SAVING
-                    List<Map<String, dynamic>> cleanItems(List items) {
-                      return items.map((i) {
+                    List<Map<String, dynamic>> cleanItems(
+                        List items) {
+                      return items.map<Map<String, dynamic>>((i) {
                         return {
                           'name': i['name'],
                           'qty': i['qty'],
@@ -258,27 +281,69 @@ Widget _actions(BuildContext context, Map<String, dynamic> data) {
                       ...data,
                       'billId': billId,
 
-                      // ✅ Replace items with cleaned version
                       if (data['items'] != null)
-                        'items': cleanItems(data['items']),
+                        'items': cleanItems(
+                          data['items'],
+                        ),
                     };
 
-                    await context
-                        .read<BillHistoryStore>()
-                        .addOrUpdateBill(finalData);
+                    try {
+                      await context
+                          .read<BillHistoryStore>()
+                          .addOrUpdateBill(finalData);
 
-                    if (!mounted) return;
+                          final confirmId = data['confirmId'];
 
-                    setState(() => _saving = false);
+if (confirmId != null) {
+  await context
+      .read<ConfirmStore>()
+      .markBillGenerated(
+        confirmId: confirmId,
+        billId: billId,
+      );
+}
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Bill saved successfully'),
-                      ),
-                    );
+                      if (!mounted) return;
 
-                    await _downloadPdf(finalData);
+                      await _downloadPdf(finalData);
+
+                      setState(() {
+                        _saving = false;
+
+                        // Prevent duplicate save only
+                        // while this screen remains open
+                        _savedInThisSession = true;
+                      });
+
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Bill saved successfully',
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+
+                      setState(() {
+                        _saving = false;
+                      });
+
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Error: $e',
+                          ),
+                        ),
+                      );
+                    }
                   },
+            style: ElevatedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 14),
+            ),
           ),
         ),
       ],

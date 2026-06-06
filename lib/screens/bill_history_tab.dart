@@ -99,7 +99,7 @@ final bool isPaid = paidAmount > 0;
                         return DataRow(
                           /// ✅ ROW COLOR
                           color:
-                              MaterialStateProperty.resolveWith<Color?>(
+                              WidgetStateProperty.resolveWith<Color?>(
                             (states) {
                               if (isPaid) {
                                 return const Color.fromARGB(255, 245, 221, 8);
@@ -160,10 +160,13 @@ final bool isPaid = paidAmount > 0;
                                         color: Colors.green),
                                     onPressed: () {
                                       Navigator.pushNamed(
-                                        context,
-                                        '/bill_preview',
-                                        arguments: b,
-                                      );
+  context,
+  '/bill_preview',
+  arguments: {
+    ...b,
+    'isViewOnly': true,
+  },
+);
                                     },
                                   ),
 
@@ -178,6 +181,7 @@ final bool isPaid = paidAmount > 0;
                                         arguments: {
                                           ...b,
                                           'isEdit': true,
+                                          'isViewOnly': false,
                                           'billId': b['billId'],
                                         },
                                       );

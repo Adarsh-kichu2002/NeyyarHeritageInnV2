@@ -22,25 +22,27 @@ class BillHistoryStore extends ChangeNotifier {
         .listen((snapshot) {
       _bills
         ..clear()
-        ..addAll(snapshot.docs.map((doc) {
-          final data = doc.data();
+        ..addAll(
+          snapshot.docs.map((doc) {
+            final data = doc.data();
 
-          return {
-            ...data,
-            'billId': doc.id, // 🔑 Firestore ID
-            'checkInDate':
-                (data['checkInDate'] as Timestamp?)?.toDate(),
-            'checkOutDate':
-                (data['checkOutDate'] as Timestamp?)?.toDate(),
-          };
-        }));
+            return {
+              ...data,
+              'billId': doc.id,
+              'checkInDate':
+                  (data['checkInDate'] as Timestamp?)?.toDate(),
+              'checkOutDate':
+                  (data['checkOutDate'] as Timestamp?)?.toDate(),
+            };
+          }),
+        );
 
       isLoading = false;
       notifyListeners();
     });
   }
 
-  /// 🧹 CLEAN ITEMS (REMOVE CONTROLLERS)
+  /// 🧹 CLEAN ITEMS
   List<Map<String, dynamic>> _cleanItems(List items) {
     return items.map((i) {
       return {
@@ -51,43 +53,46 @@ class BillHistoryStore extends ChangeNotifier {
     }).toList();
   }
 
-  /// 📌 ADD OR UPDATE BILL (NO DUPLICATES)
-  Future<void> addOrUpdateBill(Map<String, dynamic> bill) async {
-    /// 🔥 MUST HAVE billId (no fallback → prevents duplicates)
+  /// 📌 ADD OR UPDATE BILL
+  Future<void> addOrUpdateBill(
+    Map<String, dynamic> bill,
+  ) async {
     if (bill['billId'] == null) {
-      throw Exception("billId is required to save bill");
+      throw Exception('billId is required to save bill');
     }
 
     final String billId = bill['billId'];
 
     final docRef = _db.collection('bills').doc(billId);
+
     final snap = await docRef.get();
 
     final cleanData = {
       ...bill,
 
-      /// ✅ Clean items
       if (bill['items'] != null)
         'items': _cleanItems(bill['items']),
 
-      /// ✅ Convert dates properly
       if (bill['checkInDate'] is DateTime)
-        'checkInDate': Timestamp.fromDate(bill['checkInDate']),
+        'checkInDate':
+            Timestamp.fromDate(bill['checkInDate']),
 
       if (bill['checkOutDate'] is DateTime)
-        'checkOutDate': Timestamp.fromDate(bill['checkOutDate']),
+        'checkOutDate':
+            Timestamp.fromDate(bill['checkOutDate']),
 
-      /// ✅ Always keep billId consistent
       'billId': billId,
 
-      /// ✅ Update timestamp
       'updatedAt': FieldValue.serverTimestamp(),
 
-      /// ✅ Create timestamp only first time
-      if (!snap.exists) 'createdAt': FieldValue.serverTimestamp(),
+      if (!snap.exists)
+        'createdAt': FieldValue.serverTimestamp(),
     };
 
-    await docRef.set(cleanData, SetOptions(merge: true));
+    await docRef.set(
+      cleanData,
+      SetOptions(merge: true),
+    );
   }
 
   /// ❌ DELETE BILL
