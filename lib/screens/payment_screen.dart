@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
@@ -25,7 +26,21 @@ class _PaymentScreenState extends State<PaymentScreen> {
   final accountCtrl = TextEditingController(text: '0');
   final paymentRecordedByCtrl = TextEditingController();
 
+  DateTime paymentDate = DateTime.now();
+
   int _toInt(dynamic v) => int.tryParse(v?.toString() ?? '') ?? 0;
+
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
+    try {
+      final dynamic date = value.toDate();
+      return date is DateTime ? date : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -47,8 +62,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
       cashCtrl.text = _toInt(payment['cash']).toString();
       accountCtrl.text = _toInt(payment['account']).toString();
       paymentRecordedByCtrl.text =
-      payment['paymentRecordedBy']?.toString() ?? '';
-
+          payment['paymentRecordedBy']?.toString() ?? '';
+      paymentDate = _parseDate(payment['paymentDate']) ??
+          _parseDate(payment['updatedAt']) ??
+          DateTime.now();
+    } else {
+      paymentDate = DateTime.now();
     }
   }
 
@@ -57,9 +76,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
   /// =========================
 
   bool get canEdit {
-    if (!hasPayment) return true;      // First time
-    if (!isReadOnly) return true;      // From history screen
-    return false;                      // Bills screen after save
+    if (!hasPayment) return true; // First time
+    if (!isReadOnly) return true; // From history screen (admin)
+    return false; // Bills screen after save
   }
 
   /// =========================
@@ -83,23 +102,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
   /// SAVE PAYMENT
   /// =========================
   Future<void> _savePayment() async {
-    // if (!isValid) {
-     // ScaffoldMessenger.of(context).showSnackBar(
-     // const SnackBar(content: Text('Enter correct amount')),
-     // );
-      // return;
-   // }
-     if (paymentRecordedByCtrl.text.trim().isEmpty) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text('Payment Recorded By is required'),
-    ),
-  );
-  return;
-}
+    if (paymentRecordedByCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment Recorded By is required'),
+        ),
+      );
+      return;
+    }
     setState(() => _saving = true);
 
     final billId = data['billId'];
+    final selectedDate = DateTime(
+      paymentDate.year,
+      paymentDate.month,
+      paymentDate.day,
+    );
 
     final paymentData = {
       'gpay': _toInt(gpayCtrl.text),
@@ -107,6 +125,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       'account': _toInt(accountCtrl.text),
       'paidAmount': paidAmount,
       'paymentRecordedBy': paymentRecordedByCtrl.text.trim(),
+      'paymentDate': Timestamp.fromDate(selectedDate),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
@@ -114,6 +133,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       'payment': paymentData,
     }, SetOptions(merge: true));
 
+    if (!mounted) return;
     setState(() => _saving = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -121,6 +141,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
 
     Navigator.pop(context);
+  }
+
+  Future<void> _pickPaymentDate() async {
+    if (!canEdit) return;
+
+    final selected = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      initialDate: paymentDate,
+    );
+    if (selected != null) {
+      setState(() => paymentDate = selected);
+    }
   }
 
   /// =========================
@@ -190,35 +224,43 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
             const SizedBox(height: 16),
 
-TextField(
-  controller: paymentRecordedByCtrl,
-  enabled: canEdit,
-  decoration: const InputDecoration(
-    labelText: 'Payment Recorded By *',
-    border: OutlineInputBorder(),
-  ),
-),
+            TextField(
+              controller: paymentRecordedByCtrl,
+              enabled: canEdit,
+              decoration: const InputDecoration(
+                labelText: 'Payment Recorded By *',
+                border: OutlineInputBorder(),
+              ),
+            ),
 
-            /// VALIDATION
-            // Align(
-             // alignment: Alignment.centerRight,
-             // child: Text(
-              //  'Entered: ₹$paidAmount',
-               // style: TextStyle(
-                //  color: isValid ? Colors.green : Colors.red,
-                //  fontWeight: FontWeight.bold,
-               // ),
-             // ),
-           // ),
+            const SizedBox(height: 16),
 
-            //if (!isValid)
-              // const Align(
-               // alignment: Alignment.centerRight,
-               // child: Text(
-                //  '⚠ Enter correct amount',
-                 // style: TextStyle(color: Colors.red),
-               // ),
-             // ),
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Payment Date',
+                border: OutlineInputBorder(),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      DateFormat('dd/MM/yyyy').format(paymentDate),
+                      style: TextStyle(
+                        color: canEdit ? null : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: canEdit ? 'Change date' : 'Date locked',
+                    icon: Icon(
+                      Icons.calendar_today_outlined,
+                      color: canEdit ? null : Colors.grey,
+                    ),
+                    onPressed: canEdit ? _pickPaymentDate : null,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

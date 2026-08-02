@@ -29,9 +29,10 @@ class _QuotationHistoryTabState
           child: CircularProgressIndicator());
     }
 
+    final hasDateFilter = from != null || to != null;
+
     final filtered = store.quotations.where((q) {
-      final DateTime? checkIn =
-          q['checkInDate'] as DateTime?;
+      final DateTime? checkIn = _asDate(q['checkInDate']);
       if (checkIn == null) return false;
 
       if (from != null &&
@@ -43,7 +44,12 @@ class _QuotationHistoryTabState
         return false;
       }
 
-      return true;
+      // Date search bypasses the 30-day UI hide rule.
+      if (hasDateFilter) return true;
+
+      final quotationId = q['id']?.toString() ?? '';
+      final isConfirmed = confirmStore.isConfirmed(quotationId);
+      return _isWithinUiRetention(q, isConfirmed: isConfirmed);
     }).toList();
 
     return Column(
@@ -108,9 +114,6 @@ class _QuotationHistoryTabState
                                 Text('Check Out')),
                         DataColumn(
                             label:
-                                Text('Advance')),        
-                        DataColumn(
-                            label:
                                 Text('Actions')),
                       ],
                       rows: List.generate(filtered.length, (i) {
@@ -120,12 +123,8 @@ class _QuotationHistoryTabState
   final bool isConfirmed =
       confirmStore.isConfirmed(quotationId);
 
-  final DateTime? checkIn = q['checkInDate'] as DateTime?;
-  final DateTime? checkOut = q['checkOutDate'] as DateTime?;
-
-  final TextEditingController advanceCtrl =
-      TextEditingController(
-          text: (q['advance'] ?? 0).toString());
+  final DateTime? checkIn = _asDate(q['checkInDate']);
+  final DateTime? checkOut = _asDate(q['checkOutDate']);
 
   return DataRow(
     color: WidgetStateProperty.resolveWith<Color?>(
@@ -144,7 +143,51 @@ class _QuotationHistoryTabState
           activeColor: Colors.green,
           onChanged: (value) async {
             if (value == true) {
-              await confirmStore.confirmQuotation(q);
+              final paymentDetails =
+                  await _selectAdvancePaymentDetails(
+                context,
+                quotation: q,
+              );
+              if (paymentDetails == null || !context.mounted) return;
+
+              final advance = (double.tryParse(
+                        paymentDetails['advance'] ?? '0',
+                      ) ??
+                      0)
+                  .round();
+              final paidAt = DateTime.tryParse(
+                    paymentDetails['paidAt'] ?? '',
+                  ) ??
+                  DateTime.now();
+              final mode = paymentDetails['mode']!;
+              final recordedBy = paymentDetails['recordedBy']!;
+
+              try {
+                await context
+                    .read<QuotationHistoryStore>()
+                    .updateQuotation(quotationId, {
+                  'advance': advance,
+                  'advancePaymentMode': mode,
+                  'advanceRecordedBy': recordedBy,
+                  'advancePaymentDate': paidAt,
+                });
+
+                if (!context.mounted) return;
+                await confirmStore.confirmQuotation(
+                  {
+                    ...q,
+                    'advance': advance,
+                  },
+                  advancePaymentMode: mode,
+                  advanceRecordedBy: recordedBy,
+                  advancePaymentDate: paidAt,
+                );
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Could not confirm: $e')),
+                );
+              }
             } else {
               await confirmStore
                   .removeByOriginalId(quotationId);
@@ -163,36 +206,6 @@ class _QuotationHistoryTabState
       DataCell(Text(checkOut != null
           ? DateFormat('dd/MM/yyyy').format(checkOut)
           : '')),
-
-      /// 🔥 NEW ADVANCE FIELD
-      DataCell(
-        SizedBox(
-          width: 80,
-          child: TextField(
-            controller: advanceCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: "Advance",
-              isDense: true,
-              border: OutlineInputBorder(),
-            ),
-            onSubmitted: (val) async {
-              final int advance =
-                  int.tryParse(val) ?? 0;
-
-              await context
-                  .read<QuotationHistoryStore>()
-                  .updateQuotation(
-                quotationId,
-                {
-                  ...q,
-                  'advance': advance,
-                },
-              );
-            },
-          ),
-        ),
-      ),
 
       /// ACTIONS
       DataCell(
@@ -269,6 +282,169 @@ class _QuotationHistoryTabState
     );
   }
 
+  Future<Map<String, String>?> _selectAdvancePaymentDetails(
+    BuildContext context, {
+    required Map<String, dynamic> quotation,
+  }) async {
+    final existingAdvance = quotation['advance'];
+    final advanceText = existingAdvance == null
+        ? ''
+        : (existingAdvance is num
+            ? existingAdvance.round().toString()
+            : existingAdvance.toString());
+
+    final advanceController = TextEditingController(text: advanceText);
+    final recordedByController = TextEditingController(
+      text: (quotation['advanceRecordedBy'] ?? '').toString(),
+    );
+
+    final existingMode = quotation['advancePaymentMode']?.toString();
+    const modes = ['GPay', 'Account', 'Cash'];
+    String? selectedMode =
+        modes.contains(existingMode) ? existingMode : null;
+
+    DateTime paidAt = DateTime.now();
+    final existingDate = quotation['advancePaymentDate'];
+    if (existingDate is DateTime) {
+      paidAt = existingDate;
+    }
+
+    String? error;
+    try {
+      final result = await showDialog<Map<String, String>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Record advance payment'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: advanceController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Advance amount *',
+                      prefixText: '₹ ',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String>(
+                    value: selectedMode,
+                    decoration: const InputDecoration(
+                      labelText: 'Payment mode *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: modes
+                        .map(
+                          (mode) => DropdownMenuItem(
+                            value: mode,
+                            child: Text(mode),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => selectedMode = value),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: recordedByController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Recorded by *',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Payment date',
+                      border: OutlineInputBorder(),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            DateFormat('dd/MM/yyyy').format(paidAt),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Change date',
+                          icon: const Icon(Icons.calendar_today_outlined),
+                          onPressed: () async {
+                            final selected = await showDatePicker(
+                              context: dialogContext,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                              initialDate: paidAt,
+                            );
+                            if (selected != null) {
+                              setDialogState(() => paidAt = selected);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      error!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final recordedBy = recordedByController.text.trim();
+                  final parsedAdvance =
+                      double.tryParse(advanceController.text.trim()) ?? 0;
+                  if (parsedAdvance < 1) {
+                    setDialogState(() {
+                      error = 'Advance amount must be at least ₹1.';
+                    });
+                    return;
+                  }
+                  if (selectedMode == null || recordedBy.isEmpty) {
+                    setDialogState(() {
+                      error =
+                          'Payment mode and recorded by are required.';
+                    });
+                    return;
+                  }
+                  Navigator.pop(dialogContext, {
+                    'advance': parsedAdvance.round().toString(),
+                    'mode': selectedMode!,
+                    'recordedBy': recordedBy,
+                    'paidAt': paidAt.toIso8601String(),
+                  });
+                },
+                child: const Text('Confirm'),
+              ),
+            ],
+          ),
+        ),
+      );
+      return result;
+    } finally {
+      // Dispose after the dialog route is fully gone to avoid
+      // "used after disposed" crashes on Cancel/Confirm.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        advanceController.dispose();
+        recordedByController.dispose();
+      });
+    }
+  }
+
   Future<void> _confirmDelete(
       BuildContext context,
       String quotationId) async {
@@ -312,6 +488,61 @@ class _QuotationHistoryTabState
       .read<ConfirmStore>()
       .removeByOriginalId(quotationId);
 }
+  }
+
+  /// Hide from UI after 30 days (DB unchanged).
+  /// Confirmed: no 30-day rule until after checkout, then 30 days from checkout.
+  /// Unconfirmed: 30 days from createdAt (fallback check-in).
+  bool _isWithinUiRetention(
+    Map<String, dynamic> q, {
+    required bool isConfirmed,
+  }) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final checkOut = _asDate(q['checkOutDate']);
+    final advance = _toNum(q['advance']);
+    final wasConfirmed = isConfirmed ||
+        q['advancePaymentMode'] != null ||
+        advance >= 1;
+
+    if (isConfirmed) {
+      return true;
+    }
+
+    if (wasConfirmed && checkOut != null) {
+      final checkoutDay =
+          DateTime(checkOut.year, checkOut.month, checkOut.day);
+      if (!today.isAfter(checkoutDay)) return true;
+      final hideAfter = checkoutDay.add(const Duration(days: 30));
+      return !today.isAfter(hideAfter);
+    }
+
+    final created =
+        _asDate(q['createdAt']) ?? _asDate(q['checkInDate']);
+    if (created == null) return true;
+
+    final createdDay =
+        DateTime(created.year, created.month, created.day);
+    final hideAfter = createdDay.add(const Duration(days: 30));
+    return !today.isAfter(hideAfter);
+  }
+
+  DateTime? _asDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    try {
+      // Firestore Timestamp / anything with toDate()
+      final dynamic date = value.toDate();
+      if (date is DateTime) return date;
+    } catch (_) {}
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  num _toNum(dynamic value) {
+    if (value is num) return value;
+    return num.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   DateTime _startOfDay(

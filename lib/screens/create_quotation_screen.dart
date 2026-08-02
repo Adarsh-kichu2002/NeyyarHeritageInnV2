@@ -330,6 +330,16 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                           'totalPax': totalPax,
                           'rooms': rooms,
                           'facilities': facilities,
+                          'gstPercent': mode == 'edit'
+                              ? (editData?['gstPercent'] ?? 18)
+                              : 18,
+                          if (mode == 'edit') ...{
+                            'discount': editData?['discount'] ?? 0,
+                            'extraPersons': editData?['extraPersons'] ?? 0,
+                            'extraPersonPrice':
+                                editData?['extraPersonPrice'] ?? 1000,
+                            'extraTotal': editData?['extraTotal'] ?? 0,
+                          },
                         },
                       );
                     }

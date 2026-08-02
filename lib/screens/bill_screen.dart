@@ -74,10 +74,13 @@ class _BillScreenState extends State<BillScreen> {
 
       if (snapshot.docs.isNotEmpty) {
         final lastInvoice =
-            snapshot.docs.first.data()['invoiceNoInt'] ?? 31;
+            snapshot.docs.first.data()['invoiceNoInt'];
 
-        nextInvoice =
-            (lastInvoice as int) + 1;
+        final lastNo = lastInvoice is num
+            ? lastInvoice.toInt()
+            : int.tryParse(lastInvoice?.toString() ?? '') ?? 31;
+
+        nextInvoice = lastNo + 1;
       }
 
       _invoiceCtrl.text =
@@ -106,9 +109,18 @@ class _BillScreenState extends State<BillScreen> {
       return value;
     }
 
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+
     if (value is String) {
       return DateTime.tryParse(value);
     }
+
+    try {
+      final dynamic date = value.toDate();
+      if (date is DateTime) return date;
+    } catch (_) {}
 
     return null;
   }

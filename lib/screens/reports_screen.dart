@@ -29,6 +29,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   DateTime? from;
   DateTime? to;
+  bool _showAll = false;
 
   String selectedPackage = 'All';
   String selectedMonth = 'All';
@@ -70,6 +71,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    from = today;
+    to = today;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final store = context.watch<BillHistoryStore>();
 
@@ -92,20 +102,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return false;
       }
 
-      final DateTime? checkOut = bill['checkOutDate'];
+      final DateTime? reportDate = _reportDate(bill);
 
-      if (checkOut == null) {
+      if (reportDate == null) {
         return false;
       }
 
       /// DATE FILTER
       if (from != null &&
-          checkOut.isBefore(_startOfDay(from!))) {
+          reportDate.isBefore(_startOfDay(from!))) {
         return false;
       }
 
       if (to != null &&
-          checkOut.isAfter(_endOfDay(to!))) {
+          reportDate.isAfter(_endOfDay(to!))) {
         return false;
       }
 
@@ -121,7 +131,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       /// MONTH FILTER
       if (selectedMonth != 'All') {
-        if (checkOut.month !=
+        if (reportDate.month !=
             int.parse(selectedMonth)) {
           return false;
         }
@@ -129,7 +139,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       /// YEAR FILTER
       if (selectedYear != 'All') {
-        if (checkOut.year !=
+        if (reportDate.year !=
             int.parse(selectedYear)) {
           return false;
         }
@@ -167,7 +177,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
     Map<String, int> monthlyBreakup = {};
 
     for (var bill in filteredBills) {
-      final date = bill['checkOutDate'];
+      final date = _reportDate(bill);
+      if (date == null) continue;
 
       final payment = bill['payment'];
 
@@ -245,6 +256,28 @@ class _ReportsScreenState extends State<ReportsScreen> {
             padding: const EdgeInsets.all(10),
             child: Column(
               children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _showAll = true;
+                        from = null;
+                        to = null;
+                        selectedPackage = 'All';
+                        selectedMonth = 'All';
+                        selectedYear = 'All';
+                      });
+                    },
+                    child: Text(
+                      'All',
+                      style: TextStyle(
+                        fontWeight:
+                            _showAll ? FontWeight.bold : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
 
                 Row(
                   children: [
@@ -253,6 +286,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       from,
                       (d) {
                         setState(() {
+                          _showAll = false;
                           from = d;
                         });
                       },
@@ -265,6 +299,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       to,
                       (d) {
                         setState(() {
+                          _showAll = false;
                           to = d;
                         });
                       },
@@ -327,7 +362,8 @@ Expanded(
   child: ListView(
     children: monthlyBreakup.keys.map((monthKey) {
       final monthBills = filteredBills.where((bill) {
-        final date = bill['checkOutDate'];
+        final date = _reportDate(bill);
+        if (date == null) return false;
 
         final billMonth = DateFormat(
           'MMMM yyyy',
@@ -499,11 +535,11 @@ Expanded(
         ),
       ),
 
-      /// Checkout Date
+      /// Payment Date
       DataCell(
         Text(
           _fmt(
-            bill['checkOutDate'],
+            _reportDate(bill),
           ),
         ),
       ),
@@ -689,7 +725,7 @@ Expanded(
     return [
       '${bill['invoiceNo']}',
       _fmt(
-        bill['checkOutDate'],
+        _reportDate(bill),
       ),
       '${bill['customerName']}',
       '${bill['package'] ?? 'Others'}',
@@ -898,6 +934,27 @@ Expanded(
     return DateFormat(
       'dd/MM/yyyy',
     ).format(d);
+  }
+
+  DateTime? _reportDate(Map<String, dynamic> bill) {
+    final payment = bill['payment'];
+    if (payment is Map) {
+      final paymentDate = _dateValue(payment['paymentDate']) ??
+          _dateValue(payment['updatedAt']);
+      if (paymentDate != null) return paymentDate;
+    }
+    return _dateValue(bill['checkOutDate']);
+  }
+
+  DateTime? _dateValue(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
+    try {
+      final dynamic date = value?.toDate();
+      return date is DateTime ? date : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   int _toInt(

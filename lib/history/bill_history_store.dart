@@ -81,6 +81,16 @@ class BillHistoryStore extends ChangeNotifier {
         'checkOutDate':
             Timestamp.fromDate(bill['checkOutDate']),
 
+      if (bill['advancePaymentDate'] is DateTime)
+        'advancePaymentDate':
+            Timestamp.fromDate(bill['advancePaymentDate']),
+
+      if (bill['advancePayments'] is List)
+        'advancePayments': _cleanAdvancePayments(bill['advancePayments']),
+
+      if (bill['createdAt'] is DateTime)
+        'createdAt': Timestamp.fromDate(bill['createdAt']),
+
       'billId': billId,
 
       'updatedAt': FieldValue.serverTimestamp(),
@@ -93,6 +103,22 @@ class BillHistoryStore extends ChangeNotifier {
       cleanData,
       SetOptions(merge: true),
     );
+  }
+
+  List<Map<String, dynamic>> _cleanAdvancePayments(List payments) {
+    return payments.whereType<Map>().map((entry) {
+      final paidAt = entry['paidAt'];
+      return {
+        'amount': entry['amount'] ?? 0,
+        'mode': entry['mode'] ?? 'Not recorded',
+        'recordedBy': entry['recordedBy'] ?? 'Admin',
+        'paidAt': paidAt is DateTime
+            ? Timestamp.fromDate(paidAt)
+            : paidAt is Timestamp
+                ? paidAt
+                : Timestamp.now(),
+      };
+    }).toList();
   }
 
   /// ❌ DELETE BILL

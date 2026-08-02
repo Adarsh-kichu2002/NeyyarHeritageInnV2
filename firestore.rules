@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedInAndActive() {
+      return request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
+    }
+
+    // Employee profiles are managed in Firebase Console/Admin SDK only.
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    // The old APK is not authenticated, so it is denied by this rule.
+    // Add more collection-specific restrictions here if staff permissions
+    // need to be narrower than the existing app's permissions.
+    match /{document=**} {
+      allow read, write: if signedInAndActive();
+    }
+  }
+}

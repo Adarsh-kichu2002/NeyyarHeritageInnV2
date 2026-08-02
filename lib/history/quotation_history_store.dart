@@ -38,6 +38,9 @@ class QuotationHistoryStore extends ChangeNotifier {
             ...data,
             'checkInDate': parseDate(data['checkInDate']),
             'checkOutDate': parseDate(data['checkOutDate']),
+            'advancePaymentDate': parseDate(data['advancePaymentDate']),
+            'createdAt': parseDate(data['createdAt']),
+            'updatedAt': parseDate(data['updatedAt']),
           };
         }));
 
@@ -69,14 +72,26 @@ class QuotationHistoryStore extends ChangeNotifier {
   /// ✏️ UPDATE QUOTATION
   Future<void> updateQuotation(
       String quotationId, Map<String, dynamic> quotation) async {
-    final dataToUpdate = {
-      ...quotation,
-      'updatedAt': FieldValue.serverTimestamp(),
-      if (quotation['checkInDate'] is DateTime)
-        'checkInDate': Timestamp.fromDate(quotation['checkInDate']),
-      if (quotation['checkOutDate'] is DateTime)
-        'checkOutDate': Timestamp.fromDate(quotation['checkOutDate']),
-    };
+    final dataToUpdate = Map<String, dynamic>.from(quotation)
+      ..remove('id')
+      ..['updatedAt'] = FieldValue.serverTimestamp();
+
+    if (quotation['checkInDate'] is DateTime) {
+      dataToUpdate['checkInDate'] =
+          Timestamp.fromDate(quotation['checkInDate']);
+    }
+    if (quotation['checkOutDate'] is DateTime) {
+      dataToUpdate['checkOutDate'] =
+          Timestamp.fromDate(quotation['checkOutDate']);
+    }
+    if (quotation['advancePaymentDate'] is DateTime) {
+      dataToUpdate['advancePaymentDate'] =
+          Timestamp.fromDate(quotation['advancePaymentDate']);
+    }
+    if (quotation['createdAt'] is DateTime) {
+      dataToUpdate['createdAt'] =
+          Timestamp.fromDate(quotation['createdAt']);
+    }
 
     await _db
         .collection('quotations')

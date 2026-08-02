@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -9,32 +11,77 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
   final TextEditingController usernameCtrl = TextEditingController();
+  final TextEditingController passwordCtrl = TextEditingController();
+  bool _isLoggingIn = false;
 
-  void _login() {
+  // These are the usernames shown to staff. Firebase Authentication needs an
+  // email address internally, so the app maps each displayed username to its
+  // matching Firebase account.
+  static const Map<String, String> _loginEmails = {
+    'admin@neyyar': 'admin@neyyar.com',
+    'staff@neyyar': 'staff@neyyar.com',
+  };
+
+  Future<void> _login() async {
     final username = usernameCtrl.text.trim();
+    final password = passwordCtrl.text;
+    final email = _loginEmails[username];
 
-    if (username == 'admin@neyyar') {
-      Navigator.pushReplacementNamed(
-        context,
-        '/home',
-        arguments: {'role': 'admin'},
-      );
-    } else if (username == 'staff@neyyar') {
-      Navigator.pushReplacementNamed(
-        context,
-        '/home',
-        arguments: {'role': 'staff'},
-      );
-    } else {
+    if (email == null || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid Username')),
+        const SnackBar(content: Text('Enter a valid username and password')),
       );
+      return;
+    }
+
+    setState(() => _isLoggingIn = true);
+    try {
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(credential.user!.uid)
+          .get();
+      final data = userDoc.data();
+
+      // An account must be explicitly marked active by an administrator.
+      if (!userDoc.exists || data?['active'] != true ||
+          (data?['role'] != 'admin' && data?['role'] != 'staff')) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This account is not authorised to use the app')),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
+        context,
+        '/home',
+        arguments: {'role': data!['role']},
+      );
+    } on FirebaseAuthException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid username or password')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to sign in. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoggingIn = false);
     }
   }
 
   @override
   void dispose() {
     usernameCtrl.dispose();
+    passwordCtrl.dispose();
     super.dispose();
   }
 
@@ -91,24 +138,47 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
                   const SizedBox(height: 20),
 
+                  TextField(
+                    controller: passwordCtrl,
+                    obscureText: true,
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    onSubmitted: (_) => _isLoggingIn ? null : _login(),
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      hintText: 'Enter password',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
                   /// LOGIN BUTTON
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _login,
+                      onPressed: _isLoggingIn ? null : _login,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      child: const Text(
-                        'Login',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: _isLoggingIn
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text(
+                              'Login',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                     ),
                   ),
                 ],

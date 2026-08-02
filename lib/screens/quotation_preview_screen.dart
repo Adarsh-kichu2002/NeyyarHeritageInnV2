@@ -45,6 +45,17 @@ class _QuotationPreviewScreenState extends State<QuotationPreviewScreen> {
     return t.toString();
   }
 
+  String _gstPercentLabel() {
+    final value = data['gstPercent'];
+    if (value == null) return '18';
+    if (value is num) {
+      return value % 1 == 0 ? value.toInt().toString() : value.toString();
+    }
+    final parsed = double.tryParse(value.toString());
+    if (parsed == null) return '18';
+    return parsed % 1 == 0 ? parsed.toInt().toString() : parsed.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (data.isEmpty) {
@@ -187,12 +198,12 @@ class _QuotationPreviewScreenState extends State<QuotationPreviewScreen> {
 
             const SizedBox(height: 24),
 
-           const Padding(
-  padding: EdgeInsets.only(right: 20), // adjust spacing from right
+           Padding(
+  padding: const EdgeInsets.only(right: 20),
   child: Column(
     crossAxisAlignment: CrossAxisAlignment.end,
     children: [
-      Center(
+      const Center(
         child: SizedBox(
           child: Text(
             '+',
@@ -205,9 +216,9 @@ class _QuotationPreviewScreenState extends State<QuotationPreviewScreen> {
         ),
       ),
       Text(
-        'GST 5%',
+        'GST ${_gstPercentLabel()}%',
         textAlign: TextAlign.right,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
@@ -360,6 +371,7 @@ const SizedBox(height: 24),
 
   final Map<String, dynamic> finalData = {
     ...data,
+    'gstPercent': data['gstPercent'] ?? 18,
     if (data['rooms'] != null)
       'rooms': cleanRooms(data['rooms']),
     'checkInTime': timeToString(data['checkInTime']),
@@ -669,7 +681,7 @@ Future<void> _downloadPdf() async {
             ),
           ),
           pw.Text(
-            'GST 5%',
+            'GST ${_gstPercentLabel()}%',
             textAlign: pw.TextAlign.right,
             style: pw.TextStyle(
               fontSize: 14,

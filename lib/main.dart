@@ -20,6 +20,9 @@ import 'screens/bill_history_tab.dart';
 import 'history/bill_history_store.dart';
 import 'screens/payment_screen.dart';
 import 'screens/bills_screen.dart';
+import 'screens/gst_screen.dart';
+import 'screens/gst_month_bills_screen.dart';
+import 'history/gst_store.dart';
 
 import 'screens/create_itinerary.dart';
 import 'screens/itinerary_preview_screen.dart';
@@ -36,6 +39,7 @@ import 'screens/room_chart.dart';
 import 'screens/reports_screen.dart';
 import 'screens/money_chart_screen.dart';
 import 'screens/money_report_screen.dart';
+import 'screens/total_income_screen.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -69,6 +73,10 @@ class MyRoot extends StatelessWidget {
         ),
         ChangeNotifierProvider<ConfirmStore>(
           create: (_) => ConfirmStore(),
+          lazy: false,
+        ),
+        ChangeNotifierProvider<GstStore>(
+          create: (_) => GstStore(),
           lazy: false,
         ),
       ],
@@ -111,6 +119,8 @@ class MyApp extends StatelessWidget {
         '/bill_history_tab': (_) => const BillHistoryTab(),
         '/payment_screen': (_) => const PaymentScreen(),
         '/bills_screen': (_) => const BillsScreen(),
+        '/gst_screen': (_) => const GstScreen(),
+        '/gst_month_bills': (_) => const GstMonthBillsScreen(),
 
         '/create_itinerary': (_) => const CreateItineraryScreen(),
         '/itinerary_preview': (_) =>  const ItineraryPreviewScreen(),  
@@ -126,6 +136,7 @@ class MyApp extends StatelessWidget {
         '/reports_screen': (_) => const ReportsScreen(),
         '/money_chart': (_) => const MoneyChartScreen(),
         '/money_report': (_) => const MoneyReportScreen(),
+        '/total_income': (_) => const TotalIncomeScreen(),
       },
     );
   }

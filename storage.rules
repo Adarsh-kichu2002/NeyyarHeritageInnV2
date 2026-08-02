@@ -1,0 +1,14 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedInAndActive() {
+      return request.auth != null
+          && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+          && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.active == true;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if signedInAndActive();
+    }
+  }
+}

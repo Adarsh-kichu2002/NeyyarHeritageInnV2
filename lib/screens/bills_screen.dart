@@ -8,6 +8,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../history/bill_history_store.dart';
+import '../history/gst_store.dart';
 
 class BillsScreen extends StatefulWidget {
   const BillsScreen({super.key});
@@ -23,6 +24,7 @@ class _BillsScreenState extends State<BillsScreen> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<BillHistoryStore>();
+    context.watch<GstStore>();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -417,7 +419,7 @@ class _BillsScreenState extends State<BillsScreen> {
                       children: [
                         _pdfTotalRow('Total', data['subtotal'], bodyStyle),
 
-                        _pdfTotalRow('GST (5%)', data['gst'], bodyStyle),
+                        _pdfTotalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst'], bodyStyle),
 
                         _pdfTotalRow('Advance', data['advance'], bodyStyle),
 
@@ -641,6 +643,9 @@ class _BillsScreenState extends State<BillsScreen> {
                           );
                         },
                       ),
+
+                      /// SAVE TO GST (locked after save)
+                      _gstCheckbox(b),
                     ],
                   ),
                 ),
@@ -650,6 +655,120 @@ class _BillsScreenState extends State<BillsScreen> {
         ),
       ),
     );
+  }
+
+  Widget _gstCheckbox(Map<String, dynamic> bill) {
+    final gstStore = context.read<GstStore>();
+    final billId = bill['billId']?.toString() ?? '';
+    final saved =
+        bill['gstSaved'] == true || gstStore.isBillSaved(billId);
+
+    return Checkbox(
+      value: saved,
+      activeColor: Colors.red,
+      onChanged: saved
+          ? null
+          : (_) => _showSaveToGstDialog(bill),
+    );
+  }
+
+  Future<void> _showSaveToGstDialog(Map<String, dynamic> bill) async {
+    final billDate = _asBillDate(bill['checkOutDate']) ??
+        _asBillDate(bill['checkInDate']) ??
+        DateTime.now();
+
+    DateTime selectedMonth = DateTime(billDate.year, billDate.month);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Save to GST bills?'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Select the month for this GST bill (required).',
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          DateFormat('MMMM yyyy').format(selectedMonth),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Change month',
+                        icon: const Icon(Icons.calendar_month),
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedMonth,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                            helpText: 'Select month',
+                            fieldLabelText: 'Month',
+                          );
+                          if (picked != null) {
+                            setDialogState(() {
+                              selectedMonth =
+                                  DateTime(picked.year, picked.month);
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await context.read<GstStore>().saveBillToGst(
+            bill: bill,
+            month: selectedMonth.month,
+            year: selectedMonth.year,
+          );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Saved to GST (${DateFormat('MMMM yyyy').format(selectedMonth)})',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save to GST: $e')),
+      );
+    }
   }
 
   Widget _dateBox(String label, DateTime? value, Function(DateTime) onPick) {
@@ -679,6 +798,17 @@ class _BillsScreenState extends State<BillsScreen> {
     }
 
     return DateFormat('dd/MM/yyyy').format(d);
+  }
+
+  DateTime? _asBillDate(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    try {
+      final dynamic date = value.toDate();
+      if (date is DateTime) return date;
+    } catch (_) {}
+    return null;
   }
 
   DateTime _startOfDay(DateTime d) {

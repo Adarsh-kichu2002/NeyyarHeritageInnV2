@@ -183,7 +183,7 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               _totalRow('Total', data['subtotal']),
-              _totalRow('GST (5%)', data['gst']),
+              _totalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst']),
               _totalRow('Advance', data['advance']),
               _totalRow('Discount', data['discount']),
               const Divider(),
@@ -506,7 +506,7 @@ if (confirmId != null) {
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 children: [
                   _pdfTotalRow('Total', data['subtotal'], body),
-                  _pdfTotalRow('GST (5%)', data['gst'], body),
+                  _pdfTotalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst'], body),
                   _pdfTotalRow('Advance', data['advance'], body),
                   _pdfTotalRow('Discount', data['discount'], body),
                   pw.Divider(),

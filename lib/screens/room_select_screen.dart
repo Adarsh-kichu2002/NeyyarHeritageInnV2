@@ -39,6 +39,11 @@ class _RoomSelectScreenState extends State<RoomSelectScreen> {
   final TextEditingController discountCtrl =
       TextEditingController(text: '0');
 
+  /// GST % (default 18, editable)
+  final TextEditingController gstPercentCtrl =
+      TextEditingController(text: '18');
+  bool _editingGstPercent = false;
+
   /// FACILITIES
   late List<String> facilities;
   final TextEditingController facilityCtrl = TextEditingController();
@@ -81,6 +86,15 @@ void didChangeDependencies() {
   discountCtrl.text =
       isEdit ? quotationData['discount']?.toString() ?? '0' : '0';
 
+  final savedGst = quotationData['gstPercent'];
+  gstPercentCtrl.text = savedGst == null
+      ? '18'
+      : (savedGst is num
+          ? (savedGst % 1 == 0
+              ? savedGst.toInt().toString()
+              : savedGst.toString())
+          : savedGst.toString());
+
   /// FACILITIES
   facilities = isEdit && quotationData['facilities'] != null
       ? List<String>.from(quotationData['facilities'])
@@ -97,14 +111,30 @@ void didChangeDependencies() {
 
 
   int get roomTotal => rooms
-      .where((r) => r['selected'])
-      .fold(0, (s, r) => s + (r['price'] * r['qty']) as int);
+      .where((r) => r['selected'] == true)
+      .fold<int>(0, (s, r) {
+        final price = r['price'];
+        final qty = r['qty'];
+        final priceInt = price is num
+            ? price.round()
+            : int.tryParse(price?.toString() ?? '') ?? 0;
+        final qtyInt = qty is num
+            ? qty.round()
+            : int.tryParse(qty?.toString() ?? '') ?? 0;
+        return s + (priceInt * qtyInt);
+      });
 
   int get extraTotal =>
       (int.tryParse(extraPersonCtrl.text) ?? 0) *
       (int.tryParse(extraPersonPriceCtrl.text) ?? 0);
 
   int get discount => int.tryParse(discountCtrl.text) ?? 0;
+
+  double get gstPercent {
+    final value = double.tryParse(gstPercentCtrl.text.trim());
+    if (value == null || value < 0) return 18;
+    return value;
+  }
 
   int get grandTotal =>
       (roomTotal + extraTotal - discount).clamp(0, 999999);
@@ -227,6 +257,11 @@ void didChangeDependencies() {
             ),
           ),
 
+          const SizedBox(height: 16),
+
+          /// GST SECTION (before preview)
+          _gstSection(),
+
           const SizedBox(height: 24),
 
           /// PREVIEW
@@ -252,6 +287,7 @@ void didChangeDependencies() {
         'extraPersonPrice': int.tryParse(extraPersonPriceCtrl.text) ?? 0,
         'extraTotal': extraTotal,
         'discount': discount,
+        'gstPercent': gstPercent,
         'facilities': facilities,
         'total': grandTotal,
       },
@@ -275,9 +311,61 @@ void dispose() {
   customItemNameCtrl.dispose();
   customItemPriceCtrl.dispose();
   discountCtrl.dispose();
+  gstPercentCtrl.dispose();
   facilityCtrl.dispose();
   super.dispose();
 }
+
+  Widget _gstSection() {
+    final percentLabel = gstPercent % 1 == 0
+        ? gstPercent.toInt().toString()
+        : gstPercent.toString();
+
+    return Card(
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: _editingGstPercent
+                  ? TextField(
+                      controller: gstPercentCtrl,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'GST %',
+                        suffixText: '%',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) =>
+                          setState(() => _editingGstPercent = false),
+                    )
+                  : Text(
+                      'GST ($percentLabel%)',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+            ),
+            IconButton(
+              tooltip: 'Change GST %',
+              icon: Icon(
+                _editingGstPercent ? Icons.check : Icons.edit,
+                color: Colors.blue,
+              ),
+              onPressed: () {
+                setState(() => _editingGstPercent = !_editingGstPercent);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
  Widget _roomTile(Map<String, dynamic> room) {
   return Card(

@@ -20,7 +20,19 @@ class _BillListScreenState extends State<BillListScreen> {
   /// 🟢 DISCOUNT (EDITABLE)
   final discountCtrl = TextEditingController(text: '0');
 
+  /// GST % (default 18, editable)
+  final gstPercentCtrl = TextEditingController(text: '18');
+  bool _editingGstPercent = false;
+
   final List<Map<String, dynamic>> items = [];
+
+  int _toInt(dynamic value, [int fallback = 0]) {
+    if (value == null) return fallback;
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is num) return value.round();
+    return int.tryParse(value.toString()) ?? fallback;
+  }
 
   Map<String, dynamic> _createItem(String name, int qty, int price) {
     return {
@@ -54,10 +66,20 @@ class _BillListScreenState extends State<BillListScreen> {
     final bool isEdit = data['isEdit'] == true;
 
     /// 🔴 GET ADVANCE FROM QUOTATION (READ ONLY)
-    advanceAmount = data['advance'] ?? 0;
+    advanceAmount = _toInt(data['advance']);
 
     /// 🟢 LOAD DISCOUNT IF EXISTS
-    discountCtrl.text = (data['discount'] ?? 0).toString();
+    discountCtrl.text = _toInt(data['discount']).toString();
+
+    /// GST % — default 18; keep saved value when editing
+    final savedGst = data['gstPercent'];
+    gstPercentCtrl.text = savedGst == null
+        ? '18'
+        : (savedGst is num
+            ? (savedGst % 1 == 0
+                ? savedGst.toInt().toString()
+                : savedGst.toString())
+            : savedGst.toString());
 
     items.clear();
 
@@ -67,7 +89,9 @@ class _BillListScreenState extends State<BillListScreen> {
     if (isEdit && data['items'] != null) {
       final savedItems = (data['items'] as List).map((e) {
         final item = Map<String, dynamic>.from(e);
-        item['nameCtrl'] = TextEditingController(text: item['name']);
+        item['qty'] = _toInt(item['qty']);
+        item['price'] = _toInt(item['price']);
+        item['nameCtrl'] = TextEditingController(text: item['name']?.toString() ?? '');
         item['qtyCtrl'] =
             TextEditingController(text: item['qty'].toString());
         item['priceCtrl'] =
@@ -83,7 +107,9 @@ class _BillListScreenState extends State<BillListScreen> {
 
         if (!exists) {
           items.add(_createItem(
-              defaultItem['name'], defaultItem['qty'], defaultItem['price']));
+              defaultItem['name'] as String,
+              _toInt(defaultItem['qty']),
+              _toInt(defaultItem['price'])));
         }
       }
 
@@ -97,22 +123,26 @@ class _BillListScreenState extends State<BillListScreen> {
 
     for (final r in rooms.where((r) => r['selected'] == true)) {
       items.add(_createItem(
-        r['name'],
-        r['qty'] ?? 1,
-        r['price'] ?? 0,
+        r['name']?.toString() ?? '',
+        _toInt(r['qty'], 1),
+        _toInt(r['price']),
       ));
     }
 
-    if ((data['extraTotal'] ?? 0) > 0) {
+    if (_toInt(data['extraTotal']) > 0) {
       items.add(_createItem(
         'Extra Persons',
-        data['extraPersons'] ?? 1,
-        data['extraPersonPrice'] ?? 0,
+        _toInt(data['extraPersons'], 1),
+        _toInt(data['extraPersonPrice']),
       ));
     }
 
     items.addAll(defaultItems.map(
-        (e) => _createItem(e['name'], e['qty'], e['price'])));
+        (e) => _createItem(
+              e['name'] as String,
+              _toInt(e['qty']),
+              _toInt(e['price']),
+            )));
   }
 
   /// ===============================
@@ -139,9 +169,15 @@ int get discountedSubtotal {
   return amount < 0 ? 0 : amount;
 }
 
-/// GST after discount
+double get gstPercent {
+  final value = double.tryParse(gstPercentCtrl.text.trim());
+  if (value == null || value < 0) return 18;
+  return value;
+}
+
+/// GST after discount (percentage)
 int get gst =>
-    (discountedSubtotal * 0.05).round();
+    (discountedSubtotal * gstPercent / 100).round();
 
 /// Final balance
 int get balance =>
@@ -205,7 +241,7 @@ int get balance =>
             const SizedBox(height: 8),
 
             _amountRow('Subtotal', subtotal),
-            _amountRow('GST (5%)', gst),
+            _gstPercentRow(),
             _amountRow('Balance', balance, bold: true),
 
             const SizedBox(height: 12),
@@ -230,6 +266,7 @@ int get balance =>
     'items': previewItems,
     'subtotal': subtotal,
     'gst': gst,
+    'gstPercent': gstPercent,
     'advance': advanceAmount,
     'discount': discount,
     'balance': balance,
@@ -261,7 +298,52 @@ int get balance =>
       item['priceCtrl']?.dispose();
     }
     discountCtrl.dispose();
+    gstPercentCtrl.dispose();
     super.dispose();
+  }
+
+  Widget _gstPercentRow() {
+    final percentLabel = gstPercent % 1 == 0
+        ? gstPercent.toInt().toString()
+        : gstPercent.toString();
+
+    return Row(
+      children: [
+        Expanded(
+          child: _editingGstPercent
+              ? TextField(
+                  controller: gstPercentCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'GST %',
+                    suffixText: '%',
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) =>
+                      setState(() => _editingGstPercent = false),
+                )
+              : Text('GST ($percentLabel%)'),
+        ),
+        IconButton(
+          tooltip: 'Change GST %',
+          icon: Icon(
+            _editingGstPercent ? Icons.check : Icons.edit,
+            color: Colors.blue,
+          ),
+          onPressed: () {
+            setState(() => _editingGstPercent = !_editingGstPercent);
+          },
+        ),
+        Text(
+          '₹$gst',
+          style: const TextStyle(fontWeight: FontWeight.normal),
+        ),
+      ],
+    );
   }
 
   Widget _itemEditor(int index) {

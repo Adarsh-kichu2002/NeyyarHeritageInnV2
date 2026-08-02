@@ -89,6 +89,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     route: '/bills_screen'),
 
                 _actionBox(context,
+                    icon: Icons.receipt_outlined,
+                    title: 'GST',
+                    route: '/gst_screen'),
+
+                _actionBox(context,
                     icon: Icons.time_to_leave_outlined,
                     title: 'Create Itinerary',
                     route: '/create_itinerary'),
@@ -112,6 +117,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: Icons.assessment_outlined,
                     title: 'Reports',
                     route: '/reports_screen'),     
+
+                _actionBox(context,
+                    icon: Icons.account_balance_wallet_outlined,
+                    title: 'Total Income',
+                    route: '/total_income'),
               ],
             ),
           ),
