@@ -74,8 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     route: '/create_quotation'),
 
                 _actionBox(context,
-                    icon: Icons.check_circle_outline,
-                    title: 'Confirmed Quotations',
+                    icon: Icons.book_online_outlined,
+                    title: 'Bookings',
                     route: '/confirm_screen'),
 
                 _actionBox(context,

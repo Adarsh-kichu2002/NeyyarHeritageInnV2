@@ -24,7 +24,36 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
   /// Prevent double-click only while this screen is open
   bool _savedInThisSession = false;
 
-  int _toInt(dynamic v) => int.tryParse(v?.toString() ?? '') ?? 0;
+  int _toInt(dynamic v, [int fallback = 0]) {
+    if (v == null) return fallback;
+    if (v is int) return v;
+    if (v is double) return v.round();
+    if (v is num) return v.round();
+    return int.tryParse(v.toString()) ?? fallback;
+  }
+
+  int _displayAdvance(Map<String, dynamic> data) {
+    final direct = _toInt(data['advance']);
+    if (direct > 0) return direct;
+
+    final payments = data['advancePayments'];
+    if (payments is List) {
+      var total = 0;
+      for (final entry in payments) {
+        if (entry is Map) {
+          total += _toInt(entry['amount']);
+        }
+      }
+      if (total > 0) return total;
+    }
+
+    final subtotal = _toInt(data['subtotal']);
+    final gst = _toInt(data['gst']);
+    final discount = _toInt(data['discount']);
+    final balance = _toInt(data['balance']);
+    final implied = subtotal + gst - discount - balance;
+    return implied > 0 ? implied : 0;
+  }
 
   String _fmtDate(dynamic d) {
     if (d is DateTime) {
@@ -184,7 +213,7 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
             children: [
               _totalRow('Total', data['subtotal']),
               _totalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst']),
-              _totalRow('Advance', data['advance']),
+              _totalRow('Advance', _displayAdvance(data)),
               _totalRow('Discount', data['discount']),
               const Divider(),
               _totalRow('Balance', data['balance'], bold: true),
@@ -507,7 +536,7 @@ if (confirmId != null) {
                 children: [
                   _pdfTotalRow('Total', data['subtotal'], body),
                   _pdfTotalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst'], body),
-                  _pdfTotalRow('Advance', data['advance'], body),
+                  _pdfTotalRow('Advance', _displayAdvance(data), body),
                   _pdfTotalRow('Discount', data['discount'], body),
                   pw.Divider(),
                   _pdfTotalRow('Balance', data['balance'], bold),

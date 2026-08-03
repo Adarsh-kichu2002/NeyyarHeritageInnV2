@@ -33,6 +33,9 @@ class BillHistoryStore extends ChangeNotifier {
                   (data['checkInDate'] as Timestamp?)?.toDate(),
               'checkOutDate':
                   (data['checkOutDate'] as Timestamp?)?.toDate(),
+              'advancePaymentDate':
+                  (data['advancePaymentDate'] as Timestamp?)?.toDate(),
+              'advancePayments': _parseAdvancePayments(data['advancePayments']),
             };
           }),
         );
@@ -67,8 +70,21 @@ class BillHistoryStore extends ChangeNotifier {
 
     final snap = await docRef.get();
 
+    final subtotal = _toNum(bill['subtotal']);
+    final gst = _toNum(bill['gst']);
+    final discount = _toNum(bill['discount']);
+    final balance = _toNum(bill['balance']);
+    var advance = _toNum(bill['advance']).round();
+
+    // Older bills may have balance calculated with advance but advance field
+    // stored as 0 or as a double that failed to display elsewhere.
+    if (advance <= 0 && subtotal + gst - discount - balance > 0) {
+      advance = (subtotal + gst - discount - balance).round();
+    }
+
     final cleanData = {
       ...bill,
+      'advance': advance,
 
       if (bill['items'] != null)
         'items': _cleanItems(bill['items']),
@@ -112,11 +128,29 @@ class BillHistoryStore extends ChangeNotifier {
         'amount': entry['amount'] ?? 0,
         'mode': entry['mode'] ?? 'Not recorded',
         'recordedBy': entry['recordedBy'] ?? 'Admin',
-        'paidAt': paidAt is DateTime
-            ? Timestamp.fromDate(paidAt)
-            : paidAt is Timestamp
-                ? paidAt
-                : Timestamp.now(),
+        if (paidAt is DateTime)
+          'paidAt': Timestamp.fromDate(paidAt)
+        else if (paidAt is Timestamp)
+          'paidAt': paidAt,
+      };
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _parseAdvancePayments(dynamic values) {
+    if (values is! List) return [];
+    return values.whereType<Map>().map((entry) {
+      final paidAt = entry['paidAt'];
+      DateTime? parsedPaidAt;
+      if (paidAt is Timestamp) {
+        parsedPaidAt = paidAt.toDate();
+      } else if (paidAt is DateTime) {
+        parsedPaidAt = paidAt;
+      }
+      return {
+        'amount': entry['amount'] ?? 0,
+        'mode': entry['mode'],
+        'recordedBy': entry['recordedBy'],
+        if (parsedPaidAt != null) 'paidAt': parsedPaidAt,
       };
     }).toList();
   }
@@ -124,5 +158,10 @@ class BillHistoryStore extends ChangeNotifier {
   /// ❌ DELETE BILL
   Future<void> deleteBill(String billId) async {
     await _db.collection('bills').doc(billId).delete();
+  }
+
+  double _toNum(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

@@ -28,7 +28,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   DateTime paymentDate = DateTime.now();
 
-  int _toInt(dynamic v) => int.tryParse(v?.toString() ?? '') ?? 0;
+  int _toInt(dynamic v, [int fallback = 0]) {
+    if (v == null) return fallback;
+    if (v is int) return v;
+    if (v is double) return v.round();
+    if (v is num) return v.round();
+    return int.tryParse(v.toString()) ?? fallback;
+  }
 
   DateTime? _parseDate(dynamic value) {
     if (value == null) return null;

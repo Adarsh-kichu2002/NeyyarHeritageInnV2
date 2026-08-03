@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -303,10 +304,9 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
       final payments = _advancePayments(
         booking,
         fallbackAmount: advance,
-        fallbackDate: _dateValue(booking['advancePaymentDate']) ??
-            _dateValue(booking['confirmedAt']) ??
-            _dateValue(booking['createdAt']) ??
-            DateTime.now(),
+        fallbackDate: _advanceDate(booking) ??
+            _dateValue(booking['checkInDate']) ??
+            _dateValue(booking['createdAt']),
       );
       records.addAll(payments.map((payment) => _IncomeRecord(
             guestName: (booking['customerName'] ?? '—').toString(),
@@ -340,7 +340,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
         final payments = _advancePayments(
           bill,
           fallbackAmount: advance,
-          fallbackDate: _dateValue(bill['advancePaymentDate']) ??
+          fallbackDate: _advanceDate(bill) ??
               _dateValue(bill['createdAt']) ??
               billDate,
         );
@@ -396,8 +396,9 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   List<_AdvancePayment> _advancePayments(
     Map<String, dynamic> data, {
     required double fallbackAmount,
-    required DateTime fallbackDate,
+    required DateTime? fallbackDate,
   }) {
+    final savedDate = _advanceDate(data);
     final values = data['advancePayments'];
     if (values is List && values.isNotEmpty) {
       return values.whereType<Map>().map((entry) {
@@ -405,7 +406,10 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
           amount: _amount(entry['amount']),
           mode: (entry['mode'] ?? 'Not recorded').toString(),
           recordedBy: (entry['recordedBy'] ?? 'Admin').toString(),
-          date: _dateValue(entry['paidAt']) ?? fallbackDate,
+          date: savedDate ??
+              _dateValue(entry['paidAt']) ??
+              fallbackDate ??
+              DateTime(2000),
         );
       }).where((payment) => payment.amount > 0).toList();
     }
@@ -416,10 +420,13 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
             .toString(),
         recordedBy: (data['advanceRecordedBy'] ?? data['createdBy'] ?? 'Admin')
             .toString(),
-        date: _dateValue(data['advancePaymentDate']) ?? fallbackDate,
+        date: savedDate ?? fallbackDate ?? DateTime(2000),
       ),
     ];
   }
+
+  DateTime? _advanceDate(Map<String, dynamic> data) =>
+      _dateValue(data['advancePaymentDate']);
 
   Future<void> _downloadPdf(List<_IncomeRecord> records) async {
     final pdf = pw.Document();
@@ -499,6 +506,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
 
   DateTime? _dateValue(dynamic value) {
     if (value is DateTime) return value;
+    if (value is Timestamp) return value.toDate();
     try {
       final dynamic date = value?.toDate();
       return date is DateTime ? date : null;

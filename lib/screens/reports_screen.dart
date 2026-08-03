@@ -155,7 +155,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     final int totalAdvance = filteredBills.fold(
       0,
-      (sum, bill) => sum + _toInt(bill['advance']),
+      (sum, bill) => sum + _billAdvance(bill),
     );
 
     final int totalPaid = filteredBills.fold(
@@ -375,7 +375,7 @@ Expanded(
       /// MONTH NET TOTAL
       final int monthAdvance = monthBills.fold(
         0,
-        (sum, bill) => sum + _toInt(bill['advance']),
+        (sum, bill) => sum + _billAdvance(bill),
       );
 
       final int monthPaid = monthBills.fold(
@@ -520,7 +520,7 @@ Expanded(
       : 0;
 
   final int advance =
-      _toInt(bill['advance']);
+      _billAdvance(bill);
 
   final int totalAmount =
       advance + paid;
@@ -714,7 +714,7 @@ Expanded(
         : 0;
 
     final int advance =
-        _toInt(bill['advance']);
+        _billAdvance(bill);
 
     final int billAmount =
         _toInt(bill['balance']);
@@ -957,13 +957,37 @@ Expanded(
     }
   }
 
-  int _toInt(
-    dynamic value,
-  ) {
-    return int.tryParse(
-          value?.toString() ?? '0',
-        ) ??
-        0;
+  int _billAdvance(Map<String, dynamic> bill) {
+    final direct = _toInt(bill['advance']);
+    if (direct > 0) return direct;
+
+    final payments = bill['advancePayments'];
+    if (payments is List) {
+      var total = 0;
+      for (final entry in payments) {
+        if (entry is Map) {
+          total += _toInt(entry['amount']);
+        }
+      }
+      if (total > 0) return total;
+    }
+
+    final subtotal = _toInt(bill['subtotal']);
+    final gst = _toInt(bill['gst']);
+    final discount = _toInt(bill['discount']);
+    final balance = _toInt(bill['balance']);
+    final implied = subtotal + gst - discount - balance;
+    if (implied > 0) return implied;
+
+    return 0;
+  }
+
+  int _toInt(dynamic value, [int fallback = 0]) {
+    if (value == null) return fallback;
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is num) return value.round();
+    return int.tryParse(value.toString()) ?? fallback;
   }
 
   DateTime _startOfDay(

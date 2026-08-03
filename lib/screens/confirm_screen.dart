@@ -59,6 +59,22 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
 
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
+  /// Last calendar day a booking is shown (check-in through day before checkout).
+  DateTime _calendarEndDate(DateTime checkIn, DateTime? checkOut) {
+    final start = _dateOnly(checkIn);
+    if (checkOut == null) return start;
+    final checkout = _dateOnly(checkOut);
+    if (!checkout.isAfter(start)) return start;
+    return checkout.subtract(const Duration(days: 1));
+  }
+
+  bool _isOnStayCalendar(DateTime day, DateTime checkIn, DateTime? checkOut) {
+    final selected = _dateOnly(day);
+    final start = _dateOnly(checkIn);
+    final end = _calendarEndDate(checkIn, checkOut);
+    return !selected.isBefore(start) && !selected.isAfter(end);
+  }
+
   bool _isPastDay(DateTime day) {
     final today = DateTime.now();
     final yesterday = DateTime(today.year, today.month, today.day - 1);
@@ -74,7 +90,10 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
       if (checkIn is! DateTime) continue;
 
       final start = _dateOnly(checkIn);
-      final end = checkOut is DateTime ? _dateOnly(checkOut) : start;
+      final end = _calendarEndDate(
+        checkIn,
+        checkOut is DateTime ? checkOut : null,
+      );
 
       for (var d = start;
           !d.isAfter(end);
@@ -90,17 +109,16 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
     List<Map<String, dynamic>> quotations,
     DateTime day,
   ) {
-    final selected = _dateOnly(day);
-
     return quotations.where((q) {
       final checkIn = q['checkInDate'];
       final checkOut = q['checkOutDate'];
       if (checkIn is! DateTime) return false;
 
-      final start = _dateOnly(checkIn);
-      final end = checkOut is DateTime ? _dateOnly(checkOut) : start;
-
-      return !selected.isBefore(start) && !selected.isAfter(end);
+      return _isOnStayCalendar(
+        day,
+        checkIn,
+        checkOut is DateTime ? checkOut : null,
+      );
     }).toList();
   }
 

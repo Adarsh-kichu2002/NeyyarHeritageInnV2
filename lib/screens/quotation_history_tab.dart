@@ -155,10 +155,10 @@ class _QuotationHistoryTabState
                       ) ??
                       0)
                   .round();
-              final paidAt = DateTime.tryParse(
-                    paymentDetails['paidAt'] ?? '',
-                  ) ??
-                  DateTime.now();
+              final paidAt = _dateOnly(
+                DateTime.tryParse(paymentDetails['paidAt'] ?? '') ??
+                    DateTime.now(),
+              );
               final mode = paymentDetails['mode']!;
               final recordedBy = paymentDetails['recordedBy']!;
 
@@ -561,4 +561,7 @@ class _QuotationHistoryTabState
           23,
           59,
           59);
+
+  DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
 }
