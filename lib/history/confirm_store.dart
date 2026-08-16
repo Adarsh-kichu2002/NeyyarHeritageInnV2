@@ -21,6 +21,13 @@ class ConfirmStore extends ChangeNotifier {
     return _confirmed.any((q) => q['originalQuotationId'] == quotationId);
   }
 
+  Map<String, dynamic>? confirmedByQuotationId(String quotationId) {
+    for (final q in _confirmed) {
+      if (q['originalQuotationId'] == quotationId) return q;
+    }
+    return null;
+  }
+
   /// 🔥 REAL-TIME LISTENER
   /// 1️⃣ AUTO REMOVE AFTER CHECKOUT DAY ENDS
   /// 2️⃣ SORT BY NEAREST CHECK-IN DATE
@@ -126,18 +133,23 @@ class ConfirmStore extends ChangeNotifier {
     required String advancePaymentMode,
     required String advanceRecordedBy,
     DateTime? advancePaymentDate,
+    List<Map<String, dynamic>>? advancePayments,
   }) async {
     final String quotationId = q['id'];
     if (isConfirmed(quotationId)) return;
 
-    final advance = _toDouble(q['advance']);
-    final paidAt = _dateOnly(advancePaymentDate ?? DateTime.now());
-    final advancePayment = {
-      'amount': advance,
-      'mode': advancePaymentMode,
-      'recordedBy': advanceRecordedBy,
-      'paidAt': Timestamp.fromDate(paidAt),
-    };
+    final payments = _firestoreAdvancePayments(
+      advancePayments,
+      fallbackAmount: _toDouble(q['advance']),
+      fallbackMode: advancePaymentMode,
+      fallbackRecordedBy: advanceRecordedBy,
+      fallbackPaidAt: advancePaymentDate,
+    );
+    final advance = payments.fold<double>(
+      0,
+      (sum, entry) => sum + _toDouble(entry['amount']),
+    );
+    final last = payments.isNotEmpty ? payments.last : null;
 
     await _db.collection('confirmed_quotations').add({
       'originalQuotationId': quotationId,
@@ -146,10 +158,11 @@ class ConfirmStore extends ChangeNotifier {
       'phone1': q['phone1'],
       'phone2': q['phone2'] ?? '',
       'advance': advance,
-      'advancePayments': advance > 0 ? [advancePayment] : [],
-      'advancePaymentMode': advancePaymentMode,
-      'advanceRecordedBy': advanceRecordedBy,
-      'advancePaymentDate': Timestamp.fromDate(paidAt),
+      'advancePayments': payments,
+      'advancePaymentMode': last?['mode'] ?? advancePaymentMode,
+      'advanceRecordedBy': last?['recordedBy'] ?? advanceRecordedBy,
+      'advancePaymentDate': last?['paidAt'] ??
+          Timestamp.fromDate(_dateOnly(advancePaymentDate ?? DateTime.now())),
       'address': q['address'] ?? '',
       'package': q['package'],
 
@@ -234,30 +247,26 @@ class ConfirmStore extends ChangeNotifier {
     }
   }
 
-  /// Update / backfill advance amount + mode + recordedBy + date
-  /// (used for older records that only stored the amount).
-  Future<void> updateAdvanceDetails({
+  /// Replace all advance payments (edit booking — no duplicates).
+  Future<void> replaceAdvancePayments({
     required String confirmId,
-    required double amount,
-    required String mode,
-    required String recordedBy,
-    required DateTime paidAt,
+    required List<Map<String, dynamic>> advancePayments,
   }) async {
-    if (amount < 1) return;
+    final payments = _firestoreAdvancePayments(advancePayments);
+    if (payments.isEmpty) return;
 
-    final advancePayment = {
-      'amount': amount,
-      'mode': mode,
-      'recordedBy': recordedBy,
-      'paidAt': Timestamp.fromDate(paidAt),
-    };
+    final advance = payments.fold<double>(
+      0,
+      (sum, entry) => sum + _toDouble(entry['amount']),
+    );
+    final last = payments.last;
 
     final update = {
-      'advance': amount,
-      'advancePayments': [advancePayment],
-      'advancePaymentMode': mode,
-      'advanceRecordedBy': recordedBy,
-      'advancePaymentDate': Timestamp.fromDate(paidAt),
+      'advance': advance,
+      'advancePayments': payments,
+      'advancePaymentMode': last['mode'],
+      'advanceRecordedBy': last['recordedBy'],
+      'advancePaymentDate': last['paidAt'],
     };
 
     await _db.collection('confirmed_quotations').doc(confirmId).update(update);
@@ -273,6 +282,49 @@ class ConfirmStore extends ChangeNotifier {
         },
       );
     }
+  }
+
+  List<Map<String, dynamic>> _firestoreAdvancePayments(
+    List<Map<String, dynamic>>? payments, {
+    double fallbackAmount = 0,
+    String? fallbackMode,
+    String? fallbackRecordedBy,
+    DateTime? fallbackPaidAt,
+  }) {
+    Timestamp? toTimestamp(dynamic value) {
+      if (value is Timestamp) return value;
+      if (value is DateTime) return Timestamp.fromDate(_dateOnly(value));
+      return null;
+    }
+
+    if (payments != null && payments.isNotEmpty) {
+      return payments
+          .where((entry) => _toDouble(entry['amount']) >= 1)
+          .map((entry) {
+        final paidAt = toTimestamp(entry['paidAt']) ??
+            Timestamp.fromDate(_dateOnly(fallbackPaidAt ?? DateTime.now()));
+        return {
+          'amount': _toDouble(entry['amount']),
+          'mode': (entry['mode'] ?? fallbackMode ?? 'Cash').toString(),
+          'recordedBy':
+              (entry['recordedBy'] ?? fallbackRecordedBy ?? 'Admin').toString(),
+          'paidAt': paidAt,
+        };
+      }).toList();
+    }
+
+    if (fallbackAmount < 1) return [];
+
+    return [
+      {
+        'amount': fallbackAmount,
+        'mode': fallbackMode ?? 'Cash',
+        'recordedBy': fallbackRecordedBy ?? 'Admin',
+        'paidAt': Timestamp.fromDate(
+          _dateOnly(fallbackPaidAt ?? DateTime.now()),
+        ),
+      },
+    ];
   }
 
   /// Copy advance date/mode/recordedBy onto the linked bill so Total Income
@@ -468,17 +520,29 @@ class ConfirmStore extends ChangeNotifier {
 
     final docId = query.docs.first.id;
 
+    final paymentList = updatedQuotation['advancePayments'] is List
+        ? _firestoreAdvancePayments(
+            (updatedQuotation['advancePayments'] as List)
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList(),
+          )
+        : null;
+
     final dataToUpdate = {
       'customerName': updatedQuotation['customerName'],
       'phone1': updatedQuotation['phone1'],
       'phone2': updatedQuotation['phone2'] ?? '',
       if (updatedQuotation.containsKey('advance'))
         'advance': updatedQuotation['advance'] ?? 0,
-      if (updatedQuotation.containsKey('advancePaymentMode'))
-        'advancePaymentMode': updatedQuotation['advancePaymentMode'],
-      if (updatedQuotation.containsKey('advanceRecordedBy'))
-        'advanceRecordedBy': updatedQuotation['advanceRecordedBy'],
-      if (updatedQuotation['advancePaymentDate'] is DateTime) ...{
+      if (paymentList != null) ...{
+        'advancePayments': paymentList,
+        if (paymentList.isNotEmpty) ...{
+          'advancePaymentMode': paymentList.last['mode'],
+          'advanceRecordedBy': paymentList.last['recordedBy'],
+          'advancePaymentDate': paymentList.last['paidAt'],
+        },
+      } else if (updatedQuotation['advancePaymentDate'] is DateTime) ...{
         'advancePaymentDate': Timestamp.fromDate(
           _dateOnly(updatedQuotation['advancePaymentDate'] as DateTime),
         ),
@@ -493,6 +557,12 @@ class ConfirmStore extends ChangeNotifier {
           },
         ],
       },
+      if (updatedQuotation.containsKey('advancePaymentMode') &&
+          paymentList == null)
+        'advancePaymentMode': updatedQuotation['advancePaymentMode'],
+      if (updatedQuotation.containsKey('advanceRecordedBy') &&
+          paymentList == null)
+        'advanceRecordedBy': updatedQuotation['advanceRecordedBy'],
       'address': updatedQuotation['address'] ?? '',
       'package': updatedQuotation['package'],
       'checkInDate': updatedQuotation['checkInDate'] is DateTime
@@ -522,7 +592,8 @@ class ConfirmStore extends ChangeNotifier {
     if (updatedQuotation.containsKey('advancePaymentDate') ||
         updatedQuotation.containsKey('advancePaymentMode') ||
         updatedQuotation.containsKey('advanceRecordedBy') ||
-        updatedQuotation.containsKey('advance')) {
+        updatedQuotation.containsKey('advance') ||
+        updatedQuotation.containsKey('advancePayments')) {
       final snap =
           await _db.collection('confirmed_quotations').doc(docId).get();
       if (snap.exists) {

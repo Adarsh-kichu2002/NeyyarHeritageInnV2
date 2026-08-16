@@ -4,16 +4,22 @@ import 'package:provider/provider.dart';
 import '../history/bill_history_store.dart';
 
 class BillHistoryTab extends StatefulWidget {
-  const BillHistoryTab({super.key});
+  const BillHistoryTab({
+    super.key,
+    this.customerName = '',
+    this.from,
+    this.to,
+  });
+
+  final String customerName;
+  final DateTime? from;
+  final DateTime? to;
 
   @override
   State<BillHistoryTab> createState() => _BillHistoryTabState();
 }
 
 class _BillHistoryTabState extends State<BillHistoryTab> {
-  DateTime? from;
-  DateTime? to;
-
   @override
   Widget build(BuildContext context) {
     final store = context.watch<BillHistoryStore>();
@@ -22,46 +28,30 @@ class _BillHistoryTabState extends State<BillHistoryTab> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final nameQuery = widget.customerName.trim().toLowerCase();
     final filtered = store.bills.where((bill) {
+      if (nameQuery.isNotEmpty) {
+        final name = (bill['customerName'] ?? '').toString().toLowerCase();
+        if (!name.contains(nameQuery)) return false;
+      }
+
       final DateTime? checkOut = bill['checkOutDate'];
 
-      if (from == null && to == null) return true;
+      if (widget.from == null && widget.to == null) return true;
       if (checkOut == null) return false;
 
-      if (from != null && checkOut.isBefore(_startOfDay(from!))) return false;
-      if (to != null && checkOut.isAfter(_endOfDay(to!))) return false;
+      if (widget.from != null && checkOut.isBefore(_startOfDay(widget.from!))) {
+        return false;
+      }
+      if (widget.to != null && checkOut.isAfter(_endOfDay(widget.to!))) {
+        return false;
+      }
 
       return true;
     }).toList();
 
     return Column(
       children: [
-        /// FILTER
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              _dateBox('From', from, (d) => setState(() => from = d)),
-              const SizedBox(width: 8),
-              _dateBox('To', to, (d) => setState(() => to = d)),
-              IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () => setState(() {}),
-              ),
-              if (from != null || to != null)
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    setState(() {
-                      from = null;
-                      to = null;
-                    });
-                  },
-                ),
-            ],
-          ),
-        ),
-
         /// TABLE
         Expanded(
           child: filtered.isEmpty
@@ -252,27 +242,6 @@ final bool isPaid = paidAmount > 0;
     if (ok == true) {
       context.read<BillHistoryStore>().deleteBill(billId);
     }
-  }
-
-  /// DATE PICKER
-  Widget _dateBox(
-      String label, DateTime? value, Function(DateTime) onPick) {
-    return OutlinedButton(
-      onPressed: () async {
-        final d = await showDatePicker(
-          context: context,
-          firstDate: DateTime(2020),
-          lastDate: DateTime(2100),
-          initialDate: value ?? DateTime.now(),
-        );
-        if (d != null) onPick(d);
-      },
-      child: Text(
-        value == null
-            ? label
-            : DateFormat('dd/MM/yyyy').format(value),
-      ),
-    );
   }
 
   String _fmt(DateTime? d) =>

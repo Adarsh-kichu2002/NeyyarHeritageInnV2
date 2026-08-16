@@ -96,8 +96,20 @@ class MyApp extends StatelessWidget {
       title: 'Neyyar Heritage Inn',
 
       theme: ThemeData(
-        primaryColor: Colors.blue,
+        primaryColor: const Color(0xFFC8E6C9),
         scaffoldBackgroundColor: Colors.white,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFC8E6C9),
+          foregroundColor: Colors.black,
+          elevation: 1,
+          titleTextStyle: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+          iconTheme: IconThemeData(color: Colors.black),
+          actionsIconTheme: IconThemeData(color: Colors.black),
+        ),
       ),
 
       initialRoute: '/',

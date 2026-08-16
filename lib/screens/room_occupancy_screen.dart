@@ -260,13 +260,20 @@ class _RoomOccupancyScreenState extends State<RoomOccupancyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Room Chart"),
+    return PopScope(
+      canPop: _selectedDay == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        setState(() => _selectedDay = null);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Room Chart"),
+        ),
+        body: _selectedDay == null
+            ? _buildCalendar()
+            : _buildRoomEntryScreen(),
       ),
-      body: _selectedDay == null
-          ? _buildCalendar()
-          : _buildRoomEntryScreen(),
     );
   }
 
@@ -279,6 +286,9 @@ class _RoomOccupancyScreenState extends State<RoomOccupancyScreen> {
     lastDay: DateTime(2100),
     focusedDay: _focusedDay,
     enabledDayPredicate: (day) => !_isPastDay(day),
+    headerStyle: const HeaderStyle(
+      formatButtonVisible: false, // hide "2 weeks" format button
+    ),
 
     onDaySelected: (selectedDay, focusedDay) async {
   if (_isPastDay(selectedDay)) return;

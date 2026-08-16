@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../history/bill_history_store.dart';
 import '../history/confirm_store.dart';
+import '../widgets/list_filter_dialog.dart';
 
 class TotalIncomeScreen extends StatefulWidget {
   const TotalIncomeScreen({super.key});
@@ -21,6 +22,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   DateTime? _to;
   String _paymentFilter = 'All';
   bool _showAll = false;
+  String _customerName = '';
 
   @override
   void initState() {
@@ -47,11 +49,16 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
         .fold<double>(0, (sum, record) => sum + record.amount);
 
     return Scaffold(
-      backgroundColor: const Color(0xfff7f9fc),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Total Income'),
         elevation: 0,
         actions: [
+          IconButton(
+            tooltip: 'Filter',
+            icon: const Icon(Icons.filter_list),
+            onPressed: _openFilter,
+          ),
           IconButton(
             tooltip: 'Download PDF',
             icon: const Icon(Icons.download_outlined),
@@ -63,84 +70,96 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                _filters(),
                 Expanded(
                   child: records.isEmpty
                       ? _emptyState()
-                      : SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: Card(
-                            elevation: 0,
-                            clipBehavior: Clip.antiAlias,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              side: BorderSide(color: Colors.blueGrey.shade100),
-                            ),
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                headingRowColor: WidgetStatePropertyAll(
-                                  Theme.of(context).primaryColor,
-                                ),
-                                headingTextStyle: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                dataRowMinHeight: 54,
-                                dataRowMaxHeight: 66,
-                                columns: const [
-                                  DataColumn(label: Text('SL #')),
-                                  DataColumn(label: Text('Guest Name')),
-                                  DataColumn(label: Text('Package Name')),
-                                  DataColumn(label: Text('Payment Date')),
-                                  DataColumn(label: Text('Payment Type')),
-                                  DataColumn(label: Text('Payment Mode')),
-                                  DataColumn(numeric: true, label: Text('Paid Amount')),
-                                  DataColumn(label: Text('Payment Recorded By')),
-                                  DataColumn(label: Text('Bill')),
-                                ],
-                                rows: List.generate(records.length, (index) {
-                                  final record = records[index];
-                                  return DataRow(
-                                    cells: [
-                                      DataCell(Text('${index + 1}')),
-                                      DataCell(Text(record.guestName)),
-                                      DataCell(Text(record.packageName)),
-                                      DataCell(Text(_formatDate(record.date))),
-                                      DataCell(_typeBadge(record.type)),
-                                      DataCell(Text(record.mode)),
-                                      DataCell(Text(
-                                        _currency.format(record.amount),
-                                        style: const TextStyle(fontWeight: FontWeight.w700),
-                                      )),
-                                      DataCell(Text(record.recordedBy)),
-                                      DataCell(
-                                        record.bill == null
-                                            ? const Text('—')
-                                            : IconButton(
-                                                tooltip: 'View bill',
-                                                icon: const Icon(
-                                                  Icons.visibility,
-                                                  color: Colors.green,
-                                                ),
-                                                onPressed: () {
-                                                  Navigator.pushNamed(
-                                                    context,
-                                                    '/bill_preview',
-                                                    arguments: {
-                                                      ...record.bill!,
-                                                      'isViewOnly': true,
-                                                    },
-                                                  );
-                                                },
-                                              ),
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            return Scrollbar(
+                              child: SingleChildScrollView(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minWidth: constraints.maxWidth,
+                                    ),
+                                    child: DataTable(
+                                      headingRowColor:
+                                          WidgetStatePropertyAll(
+                                        Theme.of(context).primaryColor,
                                       ),
-                                    ],
-                                  );
-                                }),
+                                      headingTextStyle: const TextStyle(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      dataRowMinHeight: 54,
+                                      dataRowMaxHeight: 66,
+                                      columns: const [
+                                        DataColumn(label: Text('SL #')),
+                                        DataColumn(label: Text('Guest Name')),
+                                        DataColumn(label: Text('Package Name')),
+                                        DataColumn(label: Text('Payment Date')),
+                                        DataColumn(label: Text('Payment Type')),
+                                        DataColumn(label: Text('Payment Mode')),
+                                        DataColumn(
+                                          numeric: true,
+                                          label: Text('Paid Amount'),
+                                        ),
+                                        DataColumn(
+                                          label: Text('Payment Recorded By'),
+                                        ),
+                                        DataColumn(label: Text('Bill')),
+                                      ],
+                                      rows: List.generate(records.length,
+                                          (index) {
+                                        final record = records[index];
+                                        return DataRow(
+                                          cells: [
+                                            DataCell(Text('${index + 1}')),
+                                            DataCell(Text(record.guestName)),
+                                            DataCell(Text(record.packageName)),
+                                            DataCell(
+                                              Text(_formatDate(record.date)),
+                                            ),
+                                            DataCell(_typeBadge(record.type)),
+                                            DataCell(Text(record.mode)),
+                                            DataCell(Text(
+                                              _currency.format(record.amount),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            )),
+                                            DataCell(Text(record.recordedBy)),
+                                            DataCell(
+                                              record.bill == null
+                                                  ? const Text('—')
+                                                  : IconButton(
+                                                      tooltip: 'View bill',
+                                                      icon: const Icon(
+                                                        Icons.visibility,
+                                                        color: Colors.green,
+                                                      ),
+                                                      onPressed: () {
+                                                        Navigator.pushNamed(
+                                                          context,
+                                                          '/bill_preview',
+                                                          arguments: {
+                                                            ...record.bill!,
+                                                            'isViewOnly': true,
+                                                          },
+                                                        );
+                                                      },
+                                                    ),
+                                            ),
+                                          ],
+                                        );
+                                      }),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                 ),
                 _totalBar(total, advanceTotal, finalBillTotal),
@@ -149,81 +168,41 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
     );
   }
 
-  Widget _filters() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () {
-                setState(() {
-                  _showAll = true;
-                  _from = null;
-                  _to = null;
-                });
-              },
-              child: Text(
-                'All',
-                style: TextStyle(
-                  fontWeight: _showAll ? FontWeight.bold : FontWeight.w500,
-                  color: _showAll
-                      ? Theme.of(context).primaryColor
-                      : Colors.blueGrey.shade700,
-                ),
-              ),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(child: _datePicker('From date', _from, (date) => setState(() {
-                _showAll = false;
-                _from = date;
-              }))),
-              const SizedBox(width: 12),
-              Expanded(child: _datePicker('To date', _to, (date) => setState(() {
-                _showAll = false;
-                _to = date;
-              }))),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text('Sort by payment type', style: TextStyle(color: Colors.blueGrey.shade700, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Wrap(
+  Future<void> _openFilter() async {
+    final payment = ValueNotifier<String>(_paymentFilter);
+    final result = await showListFilterDialog(
+      context,
+      initial: ListFilterValues(
+        customerName: _customerName,
+        from: _from,
+        to: _to,
+      ),
+      extra: ValueListenableBuilder<String>(
+        valueListenable: payment,
+        builder: (_, value, __) {
+          return Wrap(
             spacing: 8,
-            children: ['All', 'Advance', 'Final Bill'].map((filter) => ChoiceChip(
-              label: Text(filter),
-              selected: _paymentFilter == filter,
-              onSelected: (_) => setState(() => _paymentFilter = filter),
-            )).toList(),
-          ),
-        ],
+            children: ['All', 'Advance', 'Final Bill'].map((filter) {
+              return ChoiceChip(
+                label: Text(filter),
+                selected: value == filter,
+                onSelected: (_) => payment.value = filter,
+              );
+            }).toList(),
+          );
+        },
       ),
     );
-  }
-
-  Widget _datePicker(String label, DateTime? value, ValueChanged<DateTime?> onSelected) {
-    return OutlinedButton.icon(
-      icon: const Icon(Icons.calendar_today_outlined, size: 18),
-      label: Text(value == null ? label : DateFormat('dd MMM yyyy').format(value)),
-      style: OutlinedButton.styleFrom(
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      ),
-      onPressed: () async {
-        final selected = await showDatePicker(
-          context: context,
-          firstDate: DateTime(2020),
-          lastDate: DateTime(2100),
-          initialDate: value ?? DateTime.now(),
-        );
-        if (selected != null) onSelected(selected);
-      },
-    );
+    final selectedPayment = payment.value;
+    payment.dispose();
+    if (result == null || !mounted) return;
+    setState(() {
+      _customerName = result.customerName;
+      _from = result.from;
+      _to = result.to;
+      _paymentFilter = selectedPayment;
+      _showAll = _from == null && _to == null && _customerName.isEmpty;
+    });
   }
 
   Widget _typeBadge(String type) {
@@ -249,17 +228,17 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
       top: false,
       child: Container(
         width: double.infinity,
-        color: Theme.of(context).primaryColor,
+        color: Colors.green,
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
         child: Column(children: [
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('Total Income', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
-            Text(_currency.format(total), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)),
+            const Text('Total Income', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 16)),
+            Text(_currency.format(total), style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 22)),
           ]),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: Text('Advance: ${_currency.format(advance)}', style: const TextStyle(color: Colors.white70))),
-            Text('Final Bill: ${_currency.format(finalBill)}', style: const TextStyle(color: Colors.white70)),
+            Expanded(child: Text('Advance: ${_currency.format(advance)}', style: const TextStyle(color: Colors.black))),
+            Text('Final Bill: ${_currency.format(finalBill)}', style: const TextStyle(color: Colors.black)),
           ]),
         ]),
       ),
@@ -269,6 +248,13 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   List<_IncomeRecord> _filteredRecords(List<_IncomeRecord> records) {
     return records.where((record) {
       if (_paymentFilter != 'All' && record.type != _paymentFilter) return false;
+      if (_customerName.trim().isNotEmpty) {
+        if (!record.guestName.toLowerCase().contains(
+              _customerName.trim().toLowerCase(),
+            )) {
+          return false;
+        }
+      }
       if (_from != null && record.date.isBefore(DateTime(_from!.year, _from!.month, _from!.day))) return false;
       if (_to != null && record.date.isAfter(DateTime(_to!.year, _to!.month, _to!.day, 23, 59, 59))) return false;
       return true;
@@ -406,8 +392,8 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
           amount: _amount(entry['amount']),
           mode: (entry['mode'] ?? 'Not recorded').toString(),
           recordedBy: (entry['recordedBy'] ?? 'Admin').toString(),
-          date: savedDate ??
-              _dateValue(entry['paidAt']) ??
+          date: _dateValue(entry['paidAt']) ??
+              _dateValue(entry['recordedDate']) ??
               fallbackDate ??
               DateTime(2000),
         );

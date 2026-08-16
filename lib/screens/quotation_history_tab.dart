@@ -1,11 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:neyyar_heritage/history/bill_history_store.dart';
 import 'package:neyyar_heritage/history/confirm_store.dart';
+import 'package:neyyar_heritage/utils/advance_payment_utils.dart';
+import 'package:neyyar_heritage/widgets/advance_payments_dialog.dart';
 import 'package:provider/provider.dart';
 import '../history/quotation_history_store.dart';
 
 class QuotationHistoryTab extends StatefulWidget {
-  const QuotationHistoryTab({super.key});
+  const QuotationHistoryTab({
+    super.key,
+    this.customerName = '',
+    this.from,
+    this.to,
+  });
+
+  final String customerName;
+  final DateTime? from;
+  final DateTime? to;
 
   @override
   State<QuotationHistoryTab> createState() =>
@@ -14,38 +26,42 @@ class QuotationHistoryTab extends StatefulWidget {
 
 class _QuotationHistoryTabState
     extends State<QuotationHistoryTab> {
-  DateTime? from;
-  DateTime? to;
-
   @override
   Widget build(BuildContext context) {
     final store =
         context.watch<QuotationHistoryStore>();
     final confirmStore =
         context.watch<ConfirmStore>();
+    final billStore = context.watch<BillHistoryStore>();
 
     if (store.isLoading) {
       return const Center(
           child: CircularProgressIndicator());
     }
 
-    final hasDateFilter = from != null || to != null;
+    final nameQuery = widget.customerName.trim().toLowerCase();
+    final hasDateFilter = widget.from != null || widget.to != null;
+    final hasNameFilter = nameQuery.isNotEmpty;
 
     final filtered = store.quotations.where((q) {
       final DateTime? checkIn = _asDate(q['checkInDate']);
       if (checkIn == null) return false;
 
-      if (from != null &&
-          checkIn.isBefore(_startOfDay(from!))) {
+      if (widget.from != null &&
+          checkIn.isBefore(_startOfDay(widget.from!))) {
         return false;
       }
-      if (to != null &&
-          checkIn.isAfter(_endOfDay(to!))) {
+      if (widget.to != null &&
+          checkIn.isAfter(_endOfDay(widget.to!))) {
         return false;
+      }
+      if (hasNameFilter) {
+        final name = (q['customerName'] ?? '').toString().toLowerCase();
+        if (!name.contains(nameQuery)) return false;
       }
 
-      // Date search bypasses the 30-day UI hide rule.
-      if (hasDateFilter) return true;
+      // Date / name search bypasses the 30-day UI hide rule.
+      if (hasDateFilter || hasNameFilter) return true;
 
       final quotationId = q['id']?.toString() ?? '';
       final isConfirmed = confirmStore.isConfirmed(quotationId);
@@ -54,33 +70,6 @@ class _QuotationHistoryTabState
 
     return Column(
       children: [
-        /// FILTER BAR
-        Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              _dateBox('From', from,
-                  (d) => setState(() => from = d)),
-              const SizedBox(width: 8),
-              _dateBox(
-                  'To', to, (d) => setState(() => to = d)),
-              IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () =>
-                    setState(() {}),
-              ),
-              if (from != null || to != null)
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () => setState(() {
-                    from = null;
-                    to = null;
-                  }),
-                ),
-            ],
-          ),
-        ),
-
         /// TABLE
         Expanded(
           child: filtered.isEmpty
@@ -123,8 +112,32 @@ class _QuotationHistoryTabState
   final bool isConfirmed =
       confirmStore.isConfirmed(quotationId);
 
+  final bool isCompleted = _isCompleted(q, isConfirmed: isConfirmed);
+  final confirmed = confirmStore.confirmedByQuotationId(quotationId);
+  final bool billGenerated = _isBillGenerated(
+    quotation: q,
+    confirmed: confirmed,
+    bills: billStore.bills,
+  );
+
   final DateTime? checkIn = _asDate(q['checkInDate']);
   final DateTime? checkOut = _asDate(q['checkOutDate']);
+
+  void onConfirmedRowTap() {
+    if (!isConfirmed) return;
+    if (billGenerated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bill already generated')),
+      );
+      return;
+    }
+    _showConfirmedBookingActions(
+      context,
+      quotation: q,
+      quotationId: quotationId,
+      confirmStore: confirmStore,
+    );
+  }
 
   return DataRow(
     color: WidgetStateProperty.resolveWith<Color?>(
@@ -132,80 +145,68 @@ class _QuotationHistoryTabState
         if (isConfirmed) {
           return Colors.yellow.shade700;
         }
+        if (isCompleted) {
+          return Colors.blue.shade200;
+        }
         return null;
       },
     ),
     cells: [
       /// CHECKBOX
       DataCell(
-        Checkbox(
-          value: isConfirmed,
-          activeColor: Colors.green,
-          onChanged: (value) async {
-            if (value == true) {
-              final paymentDetails =
-                  await _selectAdvancePaymentDetails(
-                context,
-                quotation: q,
-              );
-              if (paymentDetails == null || !context.mounted) return;
+        GestureDetector(
+          onTap: isCompleted
+              ? () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Already completed.')),
+                  );
+                }
+              : null,
+          child: Checkbox(
+            value: isConfirmed || isCompleted,
+            activeColor: Colors.green,
+            onChanged: isConfirmed || isCompleted
+                ? null
+                : (value) async {
+                    if (value != true) return;
 
-              final advance = (double.tryParse(
-                        paymentDetails['advance'] ?? '0',
-                      ) ??
-                      0)
-                  .round();
-              final paidAt = _dateOnly(
-                DateTime.tryParse(paymentDetails['paidAt'] ?? '') ??
-                    DateTime.now(),
-              );
-              final mode = paymentDetails['mode']!;
-              final recordedBy = paymentDetails['recordedBy']!;
+                    final payments = await AdvancePaymentsDialog.show(
+                      context,
+                      title: 'Record advance payment',
+                      quotation: q,
+                    );
+                    if (payments == null || !context.mounted) return;
 
-              try {
-                await context
-                    .read<QuotationHistoryStore>()
-                    .updateQuotation(quotationId, {
-                  'advance': advance,
-                  'advancePaymentMode': mode,
-                  'advanceRecordedBy': recordedBy,
-                  'advancePaymentDate': paidAt,
-                });
-
-                if (!context.mounted) return;
-                await confirmStore.confirmQuotation(
-                  {
-                    ...q,
-                    'advance': advance,
+                    try {
+                      await _saveAdvancePayments(
+                        context,
+                        quotationId: quotationId,
+                        quotation: q,
+                        payments: payments,
+                        confirmStore: confirmStore,
+                        isNewConfirmation: true,
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not confirm: $e')),
+                      );
+                    }
                   },
-                  advancePaymentMode: mode,
-                  advanceRecordedBy: recordedBy,
-                  advancePaymentDate: paidAt,
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Could not confirm: $e')),
-                );
-              }
-            } else {
-              await confirmStore
-                  .removeByOriginalId(quotationId);
-            }
-          },
+          ),
         ),
       ),
 
-      DataCell(Text('${i + 1}')),
-      DataCell(Text(q['customerName'] ?? '')),
-      DataCell(Text(q['phone1'] ?? '')),
-      DataCell(Text(q['package'] ?? '')),
+      DataCell(Text('${i + 1}'), onTap: isConfirmed ? onConfirmedRowTap : null),
+      DataCell(Text(q['customerName'] ?? ''), onTap: isConfirmed ? onConfirmedRowTap : null),
+      DataCell(Text(q['phone1'] ?? ''), onTap: isConfirmed ? onConfirmedRowTap : null),
+      DataCell(Text(q['package'] ?? ''), onTap: isConfirmed ? onConfirmedRowTap : null),
       DataCell(Text(checkIn != null
           ? DateFormat('dd/MM/yyyy').format(checkIn)
-          : '')),
+          : ''), onTap: isConfirmed ? onConfirmedRowTap : null),
       DataCell(Text(checkOut != null
           ? DateFormat('dd/MM/yyyy').format(checkOut)
-          : '')),
+          : ''), onTap: isConfirmed ? onConfirmedRowTap : null),
 
       /// ACTIONS
       DataCell(
@@ -226,6 +227,12 @@ class _QuotationHistoryTabState
               icon: const Icon(Icons.edit,
                   color: Colors.blue),
               onPressed: () {
+                if (billGenerated) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Bill already generated')),
+                  );
+                  return;
+                }
                 Navigator.pushNamed(
                   context,
                   '/create_quotation',
@@ -240,6 +247,12 @@ class _QuotationHistoryTabState
               icon: const Icon(Icons.delete,
                   color: Colors.red),
               onPressed: () {
+                if (billGenerated) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Bill already generated')),
+                  );
+                  return;
+                }
                 _confirmDelete(context, quotationId);
               },
             ),
@@ -257,192 +270,199 @@ class _QuotationHistoryTabState
     );
   }
 
-  Widget _dateBox(String label,
-      DateTime? value,
-      Function(DateTime) onPick) {
-    return OutlinedButton(
-      child: Text(value == null
-          ? label
-          : DateFormat('dd/MM/yyyy')
-              .format(value)),
-      onPressed: () async {
-        final d =
-            await showDatePicker(
-          context: context,
-          firstDate:
-              DateTime(2020),
-          lastDate:
-              DateTime(2100),
-          initialDate:
-              value ??
-                  DateTime.now(),
-        );
-        if (d != null) onPick(d);
-      },
+  Future<void> _saveAdvancePayments(
+    BuildContext context, {
+    required String quotationId,
+    required Map<String, dynamic> quotation,
+    required List<Map<String, dynamic>> payments,
+    required ConfirmStore confirmStore,
+    required bool isNewConfirmation,
+  }) async {
+    final memoryFields = AdvancePaymentUtils.parentFieldsInMemory(payments);
+    final firestoreFields = AdvancePaymentUtils.parentFieldsFromPayments(payments);
+    final lastDate =
+        AdvancePaymentUtils.parseDate(memoryFields['advancePaymentDate']) ??
+            DateTime.now();
+
+    await context.read<QuotationHistoryStore>().updateQuotation(
+      quotationId,
+      firestoreFields,
     );
+
+    if (!context.mounted) return;
+
+    if (isNewConfirmation) {
+      await confirmStore.confirmQuotation(
+        {
+          ...quotation,
+          ...memoryFields,
+        },
+        advancePaymentMode:
+            memoryFields['advancePaymentMode']?.toString() ?? 'Cash',
+        advanceRecordedBy:
+            memoryFields['advanceRecordedBy']?.toString() ?? 'Admin',
+        advancePaymentDate: lastDate,
+        advancePayments: payments,
+      );
+      return;
+    }
+
+    await confirmStore.syncAfterQuotationUpdate({
+      'id': quotationId,
+      ...quotation,
+      ...memoryFields,
+    });
   }
 
-  Future<Map<String, String>?> _selectAdvancePaymentDetails(
+  Future<void> _showConfirmedBookingActions(
     BuildContext context, {
     required Map<String, dynamic> quotation,
+    required String quotationId,
+    required ConfirmStore confirmStore,
   }) async {
-    final existingAdvance = quotation['advance'];
-    final advanceText = existingAdvance == null
-        ? ''
-        : (existingAdvance is num
-            ? existingAdvance.round().toString()
-            : existingAdvance.toString());
-
-    final advanceController = TextEditingController(text: advanceText);
-    final recordedByController = TextEditingController(
-      text: (quotation['advanceRecordedBy'] ?? '').toString(),
+    final action = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Do you want to?'),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, 'edit'),
+            child: const Text('Edit'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, 'cancel'),
+            child: const Text('Cancel Booking'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
 
-    final existingMode = quotation['advancePaymentMode']?.toString();
-    const modes = ['GPay', 'Account', 'Cash'];
-    String? selectedMode =
-        modes.contains(existingMode) ? existingMode : null;
+    if (!context.mounted || action == null) return;
 
-    DateTime paidAt = DateTime.now();
-    final existingDate = quotation['advancePaymentDate'];
-    if (existingDate is DateTime) {
-      paidAt = existingDate;
-    }
-
-    String? error;
-    try {
-      final result = await showDialog<Map<String, String>>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Record advance payment'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: advanceController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Advance amount *',
-                      prefixText: '₹ ',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  DropdownButtonFormField<String>(
-                    value: selectedMode,
-                    decoration: const InputDecoration(
-                      labelText: 'Payment mode *',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: modes
-                        .map(
-                          (mode) => DropdownMenuItem(
-                            value: mode,
-                            child: Text(mode),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setDialogState(() => selectedMode = value),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: recordedByController,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Recorded by *',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Payment date',
-                      border: OutlineInputBorder(),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            DateFormat('dd/MM/yyyy').format(paidAt),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Change date',
-                          icon: const Icon(Icons.calendar_today_outlined),
-                          onPressed: () async {
-                            final selected = await showDatePicker(
-                              context: dialogContext,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2100),
-                              initialDate: paidAt,
-                            );
-                            if (selected != null) {
-                              setDialogState(() => paidAt = selected);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      error!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final recordedBy = recordedByController.text.trim();
-                  final parsedAdvance =
-                      double.tryParse(advanceController.text.trim()) ?? 0;
-                  if (parsedAdvance < 1) {
-                    setDialogState(() {
-                      error = 'Advance amount must be at least ₹1.';
-                    });
-                    return;
-                  }
-                  if (selectedMode == null || recordedBy.isEmpty) {
-                    setDialogState(() {
-                      error =
-                          'Payment mode and recorded by are required.';
-                    });
-                    return;
-                  }
-                  Navigator.pop(dialogContext, {
-                    'advance': parsedAdvance.round().toString(),
-                    'mode': selectedMode!,
-                    'recordedBy': recordedBy,
-                    'paidAt': paidAt.toIso8601String(),
-                  });
-                },
-                child: const Text('Confirm'),
-              ),
-            ],
-          ),
-        ),
+    if (action == 'edit') {
+      final confirmed = confirmStore.confirmedByQuotationId(quotationId);
+      final payments = await AdvancePaymentsDialog.show(
+        context,
+        title: 'Edit advance payments',
+        confirmLabel: 'Save',
+        quotation: quotation,
+        confirmedRecord: confirmed,
       );
-      return result;
-    } finally {
-      // Dispose after the dialog route is fully gone to avoid
-      // "used after disposed" crashes on Cancel/Confirm.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        advanceController.dispose();
-        recordedByController.dispose();
-      });
+      if (payments == null || !context.mounted) return;
+
+      try {
+        await _saveAdvancePayments(
+          context,
+          quotationId: quotationId,
+          quotation: quotation,
+          payments: payments,
+          confirmStore: confirmStore,
+          isNewConfirmation: false,
+        );
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Booking updated')),
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update booking: $e')),
+        );
+      }
+      return;
     }
+
+    if (action == 'cancel') {
+      await confirmStore.removeByOriginalId(quotationId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Booking cancelled')),
+      );
+    }
+  }
+
+  bool _isCompleted(
+    Map<String, dynamic> q, {
+    required bool isConfirmed,
+  }) {
+    if (isConfirmed) return false;
+
+    final checkOut = _asDate(q['checkOutDate']);
+    final advance = _toNum(q['advance']);
+    final wasConfirmed = q['advancePaymentMode'] != null || advance >= 1;
+    if (!wasConfirmed || checkOut == null) return false;
+
+    final today = _dateOnly(DateTime.now());
+    final checkoutDay = _dateOnly(checkOut);
+    return today.isAfter(checkoutDay);
+  }
+
+  bool _isBillGenerated({
+    required Map<String, dynamic> quotation,
+    required Map<String, dynamic>? confirmed,
+    required List<Map<String, dynamic>> bills,
+  }) {
+    final source = confirmed ?? quotation;
+    if (source['billGenerated'] == true) return true;
+    final existingBillId = source['billId']?.toString();
+    if (existingBillId != null && existingBillId.isNotEmpty) return true;
+
+    final quotationId = quotation['id']?.toString();
+    final confirmId = confirmed?['confirmId']?.toString();
+
+    for (final bill in bills) {
+      final billId = bill['billId']?.toString();
+      if (billId == null || billId.isEmpty) continue;
+
+      if (confirmId != null &&
+          confirmId.isNotEmpty &&
+          bill['confirmId']?.toString() == confirmId) {
+        return true;
+      }
+      if (quotationId != null &&
+          quotationId.isNotEmpty &&
+          bill['originalQuotationId']?.toString() == quotationId) {
+        return true;
+      }
+
+      final sameCustomer =
+          _sameText(bill['customerName'], quotation['customerName']) &&
+              _sameText(bill['phone1'], quotation['phone1']);
+      final sameStay =
+          _sameDate(bill['checkInDate'], quotation['checkInDate']) &&
+              _sameDate(bill['checkOutDate'], quotation['checkOutDate']);
+      if (sameCustomer && sameStay) return true;
+    }
+
+    return false;
+  }
+
+  bool _sameText(dynamic a, dynamic b) {
+    final left = a?.toString().trim().toLowerCase();
+    final right = b?.toString().trim().toLowerCase();
+    return left != null && left.isNotEmpty && left == right;
+  }
+
+  bool _sameDate(dynamic a, dynamic b) {
+    final left = _asDate(a);
+    final right = _asDate(b);
+    if (left == null || right == null) return false;
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
   }
 
   Future<void> _confirmDelete(

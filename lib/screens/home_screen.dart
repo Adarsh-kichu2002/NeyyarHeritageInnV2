@@ -89,11 +89,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     route: '/bills_screen'),
 
                 _actionBox(context,
-                    icon: Icons.receipt_outlined,
-                    title: 'GST',
-                    route: '/gst_screen'),
-
-                _actionBox(context,
                     icon: Icons.time_to_leave_outlined,
                     title: 'Create Itinerary',
                     route: '/create_itinerary'),
@@ -122,6 +117,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: Icons.account_balance_wallet_outlined,
                     title: 'Total Income',
                     route: '/total_income'),
+
+                _actionBox(context,
+                    icon: Icons.receipt_outlined,
+                    title: 'GST',
+                    route: '/gst_screen'),    
               ],
             ),
           ),
@@ -191,9 +191,16 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 40, color: Colors.blue),
+              Icon(icon, size: 40, color: const Color.fromARGB(255, 42, 127, 56)),
               const SizedBox(height: 10),
-              Text(title),
+              Text(title, 
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                  fontSize: 16,
+                ),
+              )
             ],
           ),
         ),

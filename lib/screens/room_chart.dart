@@ -124,13 +124,20 @@ String _calculateGrandTotal() {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Room Chart"),
+    return PopScope(
+      canPop: _selectedDay == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        setState(() => _selectedDay = null);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Room Chart"),
+        ),
+        body: _selectedDay == null
+            ? _buildCalendar()
+            : _buildRoomDisplay(),
       ),
-      body: _selectedDay == null
-          ? _buildCalendar()
-          : _buildRoomDisplay(),
     );
   }
 
@@ -146,6 +153,9 @@ String _calculateGrandTotal() {
       lastDay: DateTime(2100),
       focusedDay: _focusedDay,
       enabledDayPredicate: (day) => !_isPastDay(day),
+      headerStyle: const HeaderStyle(
+        formatButtonVisible: false, // hide "2 weeks" format button
+      ),
 
       onDaySelected: (selectedDay, focusedDay) async {
         if (_isPastDay(selectedDay)) return;
@@ -308,14 +318,15 @@ String _calculateGrandTotal() {
 
             const SizedBox(height: 10),
 
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _selectedDay = null;
-                });
-              },
-              child: const Text("Back"),
-            ),
+            // Phone back returns to the calendar (PopScope).
+            // ElevatedButton(
+            //   onPressed: () {
+            //     setState(() {
+            //       _selectedDay = null;
+            //     });
+            //   },
+            //   child: const Text("Back"),
+            // ),
           ],
         ),
       )

@@ -39,6 +39,7 @@ class QuotationHistoryStore extends ChangeNotifier {
             'checkInDate': parseDate(data['checkInDate']),
             'checkOutDate': parseDate(data['checkOutDate']),
             'advancePaymentDate': parseDate(data['advancePaymentDate']),
+            'advancePayments': _parseAdvancePayments(data['advancePayments']),
             'createdAt': parseDate(data['createdAt']),
             'updatedAt': parseDate(data['updatedAt']),
           };
@@ -88,6 +89,11 @@ class QuotationHistoryStore extends ChangeNotifier {
       dataToUpdate['advancePaymentDate'] =
           Timestamp.fromDate(quotation['advancePaymentDate']);
     }
+    if (quotation['advancePayments'] is List) {
+      dataToUpdate['advancePayments'] = _cleanAdvancePayments(
+        quotation['advancePayments'] as List,
+      );
+    }
     if (quotation['createdAt'] is DateTime) {
       dataToUpdate['createdAt'] =
           Timestamp.fromDate(quotation['createdAt']);
@@ -102,5 +108,38 @@ class QuotationHistoryStore extends ChangeNotifier {
   /// ❌ DELETE QUOTATION
   Future<void> deleteQuotation(String quotationId) async {
     await _db.collection('quotations').doc(quotationId).delete();
+  }
+
+  List<Map<String, dynamic>> _parseAdvancePayments(dynamic values) {
+    if (values is! List) return [];
+    return values.whereType<Map>().map((entry) {
+      DateTime? paidAt;
+      final raw = entry['paidAt'];
+      if (raw is Timestamp) {
+        paidAt = raw.toDate();
+      } else if (raw is DateTime) {
+        paidAt = raw;
+      }
+      return {
+        'amount': entry['amount'],
+        'mode': entry['mode'],
+        'recordedBy': entry['recordedBy'],
+        'paidAt': paidAt,
+      };
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _cleanAdvancePayments(List payments) {
+    return payments.whereType<Map>().map((entry) {
+      final paidAt = entry['paidAt'];
+      return {
+        'amount': entry['amount'],
+        'mode': entry['mode'],
+        'recordedBy': entry['recordedBy'],
+        'paidAt': paidAt is DateTime
+            ? Timestamp.fromDate(paidAt)
+            : paidAt,
+      };
+    }).toList();
   }
 }

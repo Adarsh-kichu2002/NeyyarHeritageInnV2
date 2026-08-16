@@ -9,6 +9,7 @@ import 'package:printing/printing.dart';
 
 import '../history/bill_history_store.dart';
 import '../history/gst_store.dart';
+import '../widgets/list_filter_dialog.dart';
 
 class BillsScreen extends StatefulWidget {
   const BillsScreen({super.key});
@@ -20,6 +21,7 @@ class BillsScreen extends StatefulWidget {
 class _BillsScreenState extends State<BillsScreen> {
   DateTime? from;
   DateTime? to;
+  String customerName = '';
 
   @override
   Widget build(BuildContext context) {
@@ -31,12 +33,14 @@ class _BillsScreenState extends State<BillsScreen> {
 
       appBar: AppBar(
         title: const Text('Bills'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
 
         /// DOWNLOAD BUTTON
         actions: [
+          IconButton(
+            tooltip: 'Filter',
+            icon: const Icon(Icons.filter_list),
+            onPressed: _openFilter,
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.download),
 
@@ -57,46 +61,25 @@ class _BillsScreenState extends State<BillsScreen> {
 
       body: store.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                /// FILTER
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.all(8),
-
-                  child: Row(
-                    children: [
-                      _dateBox('From', from, (d) => setState(() => from = d)),
-
-                      const SizedBox(width: 8),
-
-                      _dateBox('To', to, (d) => setState(() => to = d)),
-
-                      IconButton(
-                        icon: const Icon(Icons.search),
-                        onPressed: () {
-                          setState(() {});
-                        },
-                      ),
-
-                      if (from != null || to != null)
-                        IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            setState(() {
-                              from = null;
-                              to = null;
-                            });
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-
-                Expanded(child: _buildTable(store)),
-              ],
-            ),
+          : _buildTable(store),
     );
+  }
+
+  Future<void> _openFilter() async {
+    final result = await showListFilterDialog(
+      context,
+      initial: ListFilterValues(
+        customerName: customerName,
+        from: from,
+        to: to,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      customerName = result.customerName;
+      from = result.from;
+      to = result.to;
+    });
   }
 
   /// DOWNLOAD MENU
@@ -488,7 +471,13 @@ class _BillsScreenState extends State<BillsScreen> {
   }
 
   Widget _buildTable(BillHistoryStore store) {
+    final nameQuery = customerName.trim().toLowerCase();
     final filtered = store.bills.where((bill) {
+      if (nameQuery.isNotEmpty) {
+        final name = (bill['customerName'] ?? '').toString().toLowerCase();
+        if (!name.contains(nameQuery)) return false;
+      }
+
       final DateTime? checkOut = bill['checkOutDate'];
 
       if (from == null && to == null) {

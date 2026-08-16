@@ -30,6 +30,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   DateTime? from;
   DateTime? to;
   bool _showAll = false;
+  String customerName = '';
 
   String selectedPackage = 'All';
   String selectedMonth = 'All';
@@ -119,6 +120,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return false;
       }
 
+      final nameQuery = customerName.trim().toLowerCase();
+      if (nameQuery.isNotEmpty) {
+        final name = (bill['customerName'] ?? '').toString().toLowerCase();
+        if (!name.contains(nameQuery)) {
+          return false;
+        }
+      }
+
       /// PACKAGE FILTER
       if (selectedPackage != 'All') {
         final packageName =
@@ -199,6 +208,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       appBar: AppBar(
   title: const Text("Reports"),
   actions: [
+    IconButton(
+      tooltip: 'Filter',
+      icon: const Icon(Icons.filter_list),
+      onPressed: _openFilters,
+    ),
     PopupMenuButton<String>(
       onSelected: (value) {
         if (value == 'money_page') {
@@ -250,110 +264,49 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       body: Column(
         children: [
-
-          /// FILTERS
           Padding(
             padding: const EdgeInsets.all(10),
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _showAll = true;
-                        from = null;
-                        to = null;
-                        selectedPackage = 'All';
-                        selectedMonth = 'All';
-                        selectedYear = 'All';
-                      });
-                    },
-                    child: Text(
-                      'All',
-                      style: TextStyle(
-                        fontWeight:
-                            _showAll ? FontWeight.bold : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-
-                Row(
+            child: Row(
                   children: [
-                    _dateBox(
-                      "From",
-                      from,
-                      (d) {
-                        setState(() {
-                          _showAll = false;
-                          from = d;
-                        });
-                      },
-                    ),
-
-                    const SizedBox(width: 8),
-
-                    _dateBox(
-                      "To",
-                      to,
-                      (d) {
-                        setState(() {
-                          _showAll = false;
-                          to = d;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                Row(
-                  children: [
-
                     Expanded(
                       child: _dropdown(
                         selectedPackage,
                         packages,
                         (v) {
                           setState(() {
-                            selectedPackage = v!;
+                            selectedPackage = v ?? 'All';
                           });
                         },
+                        hint: 'Package',
                       ),
                     ),
-
                     const SizedBox(width: 8),
-
                     Expanded(
                       child: _dropdown(
                         selectedMonth,
                         months,
                         (v) {
                           setState(() {
-                            selectedMonth = v!;
+                            selectedMonth = v ?? 'All';
                           });
                         },
+                        hint: 'Month',
                       ),
                     ),
-
                     const SizedBox(width: 8),
-
                     Expanded(
                       child: _dropdown(
                         selectedYear,
                         years,
                         (v) {
                           setState(() {
-                            selectedYear = v!;
+                            selectedYear = v ?? 'All';
                           });
                         },
+                        hint: 'Year',
                       ),
                     ),
                   ],
-                ),
-              ],
             ),
           ),
 
@@ -830,14 +783,109 @@ Expanded(
   }
 }
 
+  Future<void> _openFilters() async {
+    var dialogName = customerName;
+    var dialogFrom = from;
+    var dialogTo = to;
+    final nameController = TextEditingController(text: dialogName);
+
+    final applied = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Filter'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Customer name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _dateBox(
+                          'From',
+                          dialogFrom,
+                          (d) {
+                            setDialogState(() {
+                              dialogFrom = d;
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        _dateBox(
+                          'To',
+                          dialogTo,
+                          (d) {
+                            setDialogState(() {
+                              dialogTo = d;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    dialogName = '';
+                    dialogFrom = null;
+                    dialogTo = null;
+                    Navigator.pop(dialogContext, true);
+                  },
+                  child: const Text('Clear'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    dialogName = nameController.text.trim();
+                    Navigator.pop(dialogContext, true);
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    if (applied != true || !mounted) return;
+
+    setState(() {
+      customerName = dialogName;
+      from = dialogFrom;
+      to = dialogTo;
+      _showAll = from == null && to == null && customerName.isEmpty;
+    });
+  }
+
   Widget _dropdown(
   String value,
   List<String> list,
-  Function(String?) onChanged,
-) {
+  Function(String?) onChanged, {
+  String? hint,
+}) {
+  final visibleItems = list.where((e) => e != 'All').toList();
+  final selected = value == 'All' ? null : value;
   return DropdownButtonFormField<String>(
     isExpanded: true, // ✅ FIX
-    value: value,
+    value: selected,
+    hint: Text(hint ?? 'Select'),
     decoration: const InputDecoration(
       border: OutlineInputBorder(),
       contentPadding: EdgeInsets.symmetric(
@@ -845,7 +893,7 @@ Expanded(
         vertical: 12,
       ),
     ),
-    items: list.map((e) {
+    items: visibleItems.map((e) {
       return DropdownMenuItem<String>(
         value: e,
         child: Text(

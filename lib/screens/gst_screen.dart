@@ -14,9 +14,6 @@ class GstScreen extends StatelessWidget {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('GST'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
       ),
       body: store.isLoading
           ? const Center(child: CircularProgressIndicator())

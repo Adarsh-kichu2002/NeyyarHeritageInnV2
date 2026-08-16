@@ -20,6 +20,20 @@ class QuotationPreviewScreen extends StatefulWidget {
 
 class _QuotationPreviewScreenState extends State<QuotationPreviewScreen> {
   late Map<String, dynamic> data;
+  bool _isSaving = false;
+
+  /// View-only when opened from history/bookings visibility (already in Firebase).
+  bool _isViewOnlyQuotation() {
+    if (data['mode'] == 'edit') return false;
+
+    final id = data['id']?.toString();
+    if (id != null && id.isNotEmpty) return true;
+
+    final originalId = data['originalQuotationId']?.toString();
+    if (originalId != null && originalId.isNotEmpty) return true;
+
+    return false;
+  }
 
   @override
   void didChangeDependencies() {
@@ -247,7 +261,7 @@ const SizedBox(height: 24),
               const Text(
               '• If there is less than the number of members mentioned in the booking confirmation, it should be informed 2 days in advance'
               'Otherwise the full amount will have to be paid.\n'
-              '• Cancellation made 72 hours prior to the arrival date will receive a full refund of the advance.\n'
+              '• Cancellations made at least 72 hours before the arrival date are eligible for a full refund of the advance payment, subject to a 10% processing fee.\n'
               '• Cancellation made within 72 hours of the arrival date will result in forfeiture of the advance.\n',
               style: TextStyle(fontSize: 14, height: 1.3, color: Colors.red, fontWeight: FontWeight.w500),
               ),
@@ -339,85 +353,96 @@ const SizedBox(height: 24),
 
             const SizedBox(height: 24),
 
-            /// SAVE
+            /// SAVE / DOWNLOAD
             SizedBox(
   width: double.infinity,
   child: ElevatedButton.icon(
-    icon: const Icon(Icons.save),
-    label: const Text('Save & Download'),
-    onPressed: () async {
-  final historyStore = context.read<QuotationHistoryStore>();
-  final confirmStore = context.read<ConfirmStore>();
-
-  String? timeToString(dynamic t) {
-    if (t == null) return null;
-    if (t is TimeOfDay) {
-      return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-    }
-    return t.toString();
-  }
-
-  /// 🔥 CLEAN ROOMS
-  List<Map<String, dynamic>> cleanRooms(List rooms) {
-    return rooms.map((r) {
-      return {
-        'name': r['name'],
-        'price': r['price'],
-        'qty': r['qty'],
-        'selected': r['selected'],
-      };
-    }).toList();
-  }
-
-  final Map<String, dynamic> finalData = {
-    ...data,
-    'gstPercent': data['gstPercent'] ?? 18,
-    if (data['rooms'] != null)
-      'rooms': cleanRooms(data['rooms']),
-    'checkInTime': timeToString(data['checkInTime']),
-    'checkOutTime': timeToString(data['checkOutTime']),
-    if (data['checkInDate'] is DateTime)
-      'checkInDate': data['checkInDate'],
-    if (data['checkOutDate'] is DateTime)
-      'checkOutDate': data['checkOutDate'],
-  };
-
-  /// 🔥 EDIT MODE
-  if (data['mode'] == 'edit' && data['quotationId'] != null) {
-
-    await historyStore.updateQuotation(
-      data['quotationId'],
-      finalData,
-    );
-
-    /// ✅ CRITICAL FIX — SYNC CONFIRM STORE
-    if (confirmStore.isConfirmed(data['quotationId'])) {
-      await confirmStore.syncAfterQuotationUpdate({
-        'id': data['quotationId'],
-        ...finalData,
-      });
-    }
-
-  } else {
-    await historyStore.addQuotation(finalData);
-  }
-
-  if (!mounted) return;
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Quotation saved successfully')),
-  );
-
-  await _downloadPdf();
-
-  Navigator.pop(context);
-},
+    icon: Icon(_isViewOnlyQuotation() ? Icons.download : Icons.save),
+    label: Text(_isViewOnlyQuotation() ? 'Download' : 'Save & Download'),
+    onPressed: _isSaving ? null : () => _onSaveOrDownload(),
   ),
 ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _onSaveOrDownload() async {
+    setState(() => _isSaving = true);
+
+    try {
+      if (_isViewOnlyQuotation()) {
+        await _downloadPdf();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quotation downloaded')),
+        );
+        return;
+      }
+
+      final historyStore = context.read<QuotationHistoryStore>();
+      final confirmStore = context.read<ConfirmStore>();
+
+      String? timeToString(dynamic t) {
+        if (t == null) return null;
+        if (t is TimeOfDay) {
+          return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+        }
+        return t.toString();
+      }
+
+      List<Map<String, dynamic>> cleanRooms(List rooms) {
+        return rooms.map((r) {
+          return {
+            'name': r['name'],
+            'price': r['price'],
+            'qty': r['qty'],
+            'selected': r['selected'],
+          };
+        }).toList();
+      }
+
+      final Map<String, dynamic> finalData = {
+        ...data,
+        'gstPercent': data['gstPercent'] ?? 18,
+        if (data['rooms'] != null) 'rooms': cleanRooms(data['rooms']),
+        'checkInTime': timeToString(data['checkInTime']),
+        'checkOutTime': timeToString(data['checkOutTime']),
+        if (data['checkInDate'] is DateTime) 'checkInDate': data['checkInDate'],
+        if (data['checkOutDate'] is DateTime)
+          'checkOutDate': data['checkOutDate'],
+      };
+
+      if (data['mode'] == 'edit' && data['quotationId'] != null) {
+        await historyStore.updateQuotation(
+          data['quotationId'],
+          finalData,
+        );
+
+        if (confirmStore.isConfirmed(data['quotationId'])) {
+          await confirmStore.syncAfterQuotationUpdate({
+            'id': data['quotationId'],
+            ...finalData,
+          });
+        }
+      } else {
+        await historyStore.addQuotation(finalData);
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Quotation saved successfully')),
+      );
+
+      await _downloadPdf();
+
+      if (!mounted) return;
+      Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   /// PDF GENERATION
@@ -723,7 +748,7 @@ pw.SizedBox(height: 10),
           '• No Transportation Available\n'
           '• If there is less than the number of members mentioned in the booking confirmation, it should be informed 2 days in\n'
           '  advance. Otherwise the full amount will have to be paid.\n'
-          '• Cancellation made 72 hours prior to the arrival date will receive a full refund of the advance.\n'
+          '• Cancellations made at least 72 hours before the arrival date are eligible for a full refund of the advance payment, subject to a 10% processing fee.\n'
           '• Cancellation made within 72 hours of the arrival date will result in forfeiture of the advance.\n',
           style: const pw.TextStyle(fontSize: 10, height: 1.2, color: PdfColors.red),
         ),

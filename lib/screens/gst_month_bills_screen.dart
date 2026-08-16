@@ -43,9 +43,6 @@ class _GstMonthBillsScreenState extends State<GstMonthBillsScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(label),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
         actions: [
           IconButton(
             tooltip: 'Download PDF',

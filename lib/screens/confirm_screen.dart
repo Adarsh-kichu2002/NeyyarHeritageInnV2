@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
+import 'package:neyyar_heritage/widgets/advance_payments_dialog.dart';
 
 class ConfirmScreen extends StatefulWidget {
   const ConfirmScreen({super.key});
@@ -76,9 +77,18 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
   }
 
   bool _isPastDay(DateTime day) {
+    return _dateOnly(day).isBefore(_earliestSelectableDay());
+  }
+
+  /// Yesterday and today are tappable (generate bill on last stay day when checkout is today).
+  DateTime _earliestSelectableDay() {
     final today = DateTime.now();
-    final yesterday = DateTime(today.year, today.month, today.day - 1);
-    return day.isBefore(yesterday);
+    return DateTime(today.year, today.month, today.day - 1);
+  }
+
+  DateTime _todayOnly() {
+    final today = DateTime.now();
+    return DateTime(today.year, today.month, today.day);
   }
 
   Map<String, bool> _markedDates(List<Map<String, dynamic>> quotations) {
@@ -142,26 +152,38 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
     final quotations = store.confirmedQuotations;
     final markedDates = _markedDates(quotations);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Confirmed Quotations')),
-      body: _selectedDay == null
-          ? _buildCalendar(markedDates)
-          : _buildDayDisplay(
-              _quotationsForDay(quotations, _selectedDay!),
-              billStore.bills,
-            ),
+    return PopScope(
+      canPop: _selectedDay == null,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        setState(() => _selectedDay = null);
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Confirmed Quotations')),
+        body: _selectedDay == null
+            ? _buildCalendar(markedDates)
+            : _buildDayDisplay(
+                _quotationsForDay(quotations, _selectedDay!),
+                billStore.bills,
+              ),
+      ),
     );
   }
 
   Widget _buildCalendar(Map<String, bool> markedDates) {
-    final today = DateTime.now();
-    final todayOnly = DateTime(today.year, today.month, today.day);
+    final todayOnly = _todayOnly();
+    final earliestDay = _earliestSelectableDay();
+    final focusedDay =
+        _focusedDay.isBefore(earliestDay) ? todayOnly : _focusedDay;
 
     return TableCalendar(
-      firstDay: todayOnly,
+      firstDay: earliestDay,
       lastDay: DateTime(2100),
-      focusedDay: _focusedDay,
+      focusedDay: focusedDay,
       enabledDayPredicate: (day) => !_isPastDay(day),
+      headerStyle: const HeaderStyle(
+        formatButtonVisible: false, // hide "2 weeks" format button
+      ),
       onDaySelected: (selectedDay, focusedDay) {
         if (_isPastDay(selectedDay)) return;
         setState(() {
@@ -191,10 +213,31 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         defaultBuilder: (context, day, focusedDay) {
           final id = _dayKey(day);
           if (markedDates.containsKey(id)) {
-            return _redDay(day);
+            return _isYesterday(day) ? _orangeDay(day) : _redDay(day);
+          }
+          if (_isYesterday(day)) {
+            return _orangeDay(day);
           }
           return null;
         },
+      ),
+    );
+  }
+
+  bool _isYesterday(DateTime day) =>
+      _dateOnly(day) == _earliestSelectableDay();
+
+  Widget _orangeDay(DateTime day) {
+    return Container(
+      margin: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade400,
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '${day.day}',
+        style: const TextStyle(color: Colors.white),
       ),
     );
   }
@@ -254,13 +297,13 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
                   fontSize: 16,
                 ),
               ),
-              const SizedBox(height: 10),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() => _selectedDay = null);
-                },
-                child: const Text('Back'),
-              ),
+              // Phone back returns to the calendar (PopScope).
+              // ElevatedButton(
+              //   onPressed: () {
+              //     setState(() => _selectedDay = null);
+              //   },
+              //   child: const Text('Back'),
+              // ),
             ],
           ),
         ),
@@ -321,10 +364,16 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
                   InkWell(
                     onTap: advance < 1
                         ? null
-                        : () => _editAdvanceDetails(context, q),
+                        : () => AdvancePaymentsViewDialog.show(
+                              context,
+                              record: q,
+                            ),
                     child: Text(
                       'Advance: ₹${q['advance'] ?? 0}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -405,197 +454,6 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _editAdvanceDetails(
-    BuildContext context,
-    Map<String, dynamic> quotation,
-  ) async {
-    final existingAdvance =
-        double.tryParse('${quotation['advance'] ?? 0}') ?? 0;
-    final amountController = TextEditingController(
-      text: existingAdvance > 0 ? existingAdvance.round().toString() : '',
-    );
-    final recordedByController = TextEditingController(
-      text: (quotation['advanceRecordedBy'] ?? '').toString(),
-    );
-
-    const modes = ['GPay', 'Account', 'Cash'];
-    final existingMode = quotation['advancePaymentMode']?.toString();
-    String mode = modes.contains(existingMode) ? existingMode! : 'GPay';
-
-    DateTime paidAt = DateTime.now();
-    final existingDate = quotation['advancePaymentDate'];
-    if (existingDate is DateTime) {
-      paidAt = existingDate;
-    } else {
-      final payments = quotation['advancePayments'];
-      if (payments is List && payments.isNotEmpty) {
-        final first = payments.first;
-        if (first is Map) {
-          final paid = first['paidAt'];
-          if (paid is DateTime) {
-            paidAt = paid;
-          } else {
-            try {
-              final dynamic date = paid?.toDate();
-              if (date is DateTime) paidAt = date;
-            } catch (_) {}
-          }
-        }
-      }
-    }
-
-    String? error;
-    Map<String, dynamic>? result;
-    try {
-      result = await showDialog<Map<String, dynamic>>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Edit advance payment'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: amountController,
-                    autofocus: true,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Advance amount *',
-                      prefixText: '₹ ',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  DropdownButtonFormField<String>(
-                    value: mode,
-                    decoration: const InputDecoration(
-                      labelText: 'Payment mode *',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: modes
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item,
-                            child: Text(item),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setDialogState(() => mode = value ?? mode),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: recordedByController,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Recorded by *',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Payment date',
-                      border: OutlineInputBorder(),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            DateFormat('dd/MM/yyyy').format(paidAt),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Change date',
-                          icon: const Icon(Icons.calendar_today_outlined),
-                          onPressed: () async {
-                            final selected = await showDatePicker(
-                              context: dialogContext,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2100),
-                              initialDate: paidAt,
-                            );
-                            if (selected != null) {
-                              setDialogState(() => paidAt = selected);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(error!, style: const TextStyle(color: Colors.red)),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  final amount =
-                      double.tryParse(amountController.text.trim()) ?? 0;
-                  final recordedBy = recordedByController.text.trim();
-                  if (amount < 1) {
-                    setDialogState(() {
-                      error = 'Advance amount must be at least ₹1.';
-                    });
-                    return;
-                  }
-                  if (recordedBy.isEmpty) {
-                    setDialogState(() {
-                      error = 'Recorded by is required.';
-                    });
-                    return;
-                  }
-                  Navigator.pop(dialogContext, {
-                    'amount': amount,
-                    'mode': mode,
-                    'recordedBy': recordedBy,
-                    'paidAt': paidAt,
-                  });
-                },
-                child: const Text('Save'),
-              ),
-            ],
-          ),
-        ),
-      );
-    } finally {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        amountController.dispose();
-        recordedByController.dispose();
-      });
-    }
-
-    if (result == null || !context.mounted) return;
-
-    try {
-      await context.read<ConfirmStore>().updateAdvanceDetails(
-            confirmId: quotation['confirmId'].toString(),
-            amount: result['amount'] as double,
-            mode: result['mode'].toString(),
-            recordedBy: result['recordedBy'].toString(),
-            paidAt: result['paidAt'] as DateTime,
-          );
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Advance details updated')),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update advance: $e')),
-      );
-    }
   }
 
   String? _generatedBillId(
