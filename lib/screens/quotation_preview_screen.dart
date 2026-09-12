@@ -25,9 +25,14 @@ class _QuotationPreviewScreenState extends State<QuotationPreviewScreen> {
   /// View-only when opened from history/bookings visibility (already in Firebase).
   bool _isViewOnlyQuotation() {
     if (data['mode'] == 'edit') return false;
+    if (data['isViewOnly'] == true) return true;
 
     final id = data['id']?.toString();
     if (id != null && id.isNotEmpty) return true;
+
+    // Bookings use confirmId (not id) on confirmed_quotations docs.
+    final confirmId = data['confirmId']?.toString();
+    if (confirmId != null && confirmId.isNotEmpty) return true;
 
     final originalId = data['originalQuotationId']?.toString();
     if (originalId != null && originalId.isNotEmpty) return true;

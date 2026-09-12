@@ -48,10 +48,10 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
     }
 
     final subtotal = _toInt(data['subtotal']);
-    final gst = _toInt(data['gst']);
     final discount = _toInt(data['discount']);
     final balance = _toInt(data['balance']);
-    final implied = subtotal + gst - discount - balance;
+    // subtotal already includes GST
+    final implied = subtotal - discount - balance;
     return implied > 0 ? implied : 0;
   }
 
@@ -138,13 +138,21 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
       );
 
   Widget _partyInfo(Map<String, dynamic> data) {
+    final address = (data['address'] ?? '').toString().trim();
+    final customerGst = (data['customerGst'] ?? data['gstNo'] ?? '')
+        .toString()
+        .trim();
+
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(data['customerName'] ?? '',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             Text('Mob: ${data['phone1'] ?? ''}'),
+            if (address.isNotEmpty) Text(address),
+            if (customerGst.isNotEmpty) Text('GST: $customerGst'),
           ]),
         ),
         Expanded(
@@ -164,9 +172,11 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
       border: TableBorder.all(color: Colors.grey),
       columnWidths: const {
         0: FlexColumnWidth(3),
-        1: FlexColumnWidth(2),
-        2: FlexColumnWidth(2),
-        3: FlexColumnWidth(2),
+        1: FlexColumnWidth(1.5),
+        2: FlexColumnWidth(1.2),
+        3: FlexColumnWidth(1.4),
+        4: FlexColumnWidth(1.4),
+        5: FlexColumnWidth(1.6),
       },
       children: [
         TableRow(
@@ -175,18 +185,30 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
             _HeaderCell('Description'),
             _HeaderCell('Price'),
             _HeaderCell('Qty'),
+            _HeaderCell('GST (%)'),
+            _HeaderCell('GST'),
             _HeaderCell('Total'),
           ],
         ),
         ...items.map((i) {
           final qty = _toInt(i['qty']);
           final price = _toInt(i['price']);
+          final net = qty * price;
+          final gstPercent = _toInt(i['gstPercent'], 5);
+          final gstAmount = i['gstAmount'] != null
+              ? _toInt(i['gstAmount'])
+              : (net * gstPercent / 100).round();
+          final lineTotal = i['lineTotal'] != null
+              ? _toInt(i['lineTotal'])
+              : net + gstAmount;
           return TableRow(
             children: [
               _Cell(i['name'] ?? ''),
               _Cell('₹$price'),
               _Cell('$qty'),
-              _Cell('₹${qty * price}'),
+              _Cell('$gstPercent'),
+              _Cell('₹$gstAmount'),
+              _Cell('₹$lineTotal'),
             ],
           );
         }),
@@ -195,6 +217,8 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
   }
 
   Widget _summaryWithNotes(Map<String, dynamic> data) {
+    final discount = _toInt(data['discount']);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -211,10 +235,10 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              _totalRow('GST', data['gst']),
               _totalRow('Total', data['subtotal']),
-              _totalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst']),
               _totalRow('Advance', _displayAdvance(data)),
-              _totalRow('Discount', data['discount']),
+              if (discount > 0) _totalRow('Discount', discount),
               const Divider(),
               _totalRow('Balance', data['balance'], bold: true),
             ],
@@ -298,10 +322,20 @@ Widget _actions(BuildContext context, Map<String, dynamic> data) {
                     List<Map<String, dynamic>> cleanItems(
                         List items) {
                       return items.map<Map<String, dynamic>>((i) {
+                        final qty = _toInt(i['qty']);
+                        final price = _toInt(i['price']);
+                        final gstPercent = _toInt(i['gstPercent'], 5);
+                        final net = qty * price;
+                        final gstAmount = i['gstAmount'] != null
+                            ? _toInt(i['gstAmount'])
+                            : (net * gstPercent / 100).round();
                         return {
                           'name': i['name'],
-                          'qty': i['qty'],
-                          'price': i['price'],
+                          'qty': qty,
+                          'price': price,
+                          'gstPercent': gstPercent,
+                          'gstAmount': gstAmount,
+                          'lineTotal': i['lineTotal'] ?? (net + gstAmount),
                         };
                       }).toList();
                     }
@@ -453,6 +487,7 @@ if (confirmId != null) {
 
         /// PARTY INFO
         pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Expanded(
               child: pw.Column(
@@ -460,6 +495,16 @@ if (confirmId != null) {
                 children: [
                   pw.Text(data['customerName'] ?? '', style: bold),
                   pw.Text('Mob: ${data['phone1'] ?? ''}', style: body),
+                  if ((data['address'] ?? '').toString().trim().isNotEmpty)
+                    pw.Text(data['address'].toString().trim(), style: body),
+                  if ((data['customerGst'] ?? data['gstNo'] ?? '')
+                      .toString()
+                      .trim()
+                      .isNotEmpty)
+                    pw.Text(
+                      'GST: ${(data['customerGst'] ?? data['gstNo']).toString().trim()}',
+                      style: body,
+                    ),
                 ],
               ),
             ),
@@ -484,9 +529,11 @@ if (confirmId != null) {
           border: pw.TableBorder.all(color: PdfColors.grey),
           columnWidths: const {
             0: pw.FlexColumnWidth(3),
-            1: pw.FlexColumnWidth(2),
-            2: pw.FlexColumnWidth(2),
-            3: pw.FlexColumnWidth(2),
+            1: pw.FlexColumnWidth(1.5),
+            2: pw.FlexColumnWidth(1.2),
+            3: pw.FlexColumnWidth(1.4),
+            4: pw.FlexColumnWidth(1.4),
+            5: pw.FlexColumnWidth(1.6),
           },
           children: [
             pw.TableRow(
@@ -495,18 +542,30 @@ if (confirmId != null) {
                 _pdfHeaderCell('Description'),
                 _pdfHeaderCell('Price'),
                 _pdfHeaderCell('Qty'),
+                _pdfHeaderCell('GST (%)'),
+                _pdfHeaderCell('GST'),
                 _pdfHeaderCell('Total'),
               ],
             ),
             ...items.map((i) {
               final qty = _toInt(i['qty']);
               final price = _toInt(i['price']);
+              final net = qty * price;
+              final gstPercent = _toInt(i['gstPercent'], 5);
+              final gstAmount = i['gstAmount'] != null
+                  ? _toInt(i['gstAmount'])
+                  : (net * gstPercent / 100).round();
+              final lineTotal = i['lineTotal'] != null
+                  ? _toInt(i['lineTotal'])
+                  : net + gstAmount;
               return pw.TableRow(
                 children: [
                   _pdfCell(i['name'] ?? ''),
                   _pdfCell('₹$price'),
                   _pdfCell('$qty'),
-                  _pdfCell('₹${qty * price}'),
+                  _pdfCell('$gstPercent'),
+                  _pdfCell('₹$gstAmount'),
+                  _pdfCell('₹$lineTotal'),
                 ],
               );
             }),
@@ -534,10 +593,11 @@ if (confirmId != null) {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.end,
                 children: [
+                  _pdfTotalRow('GST', data['gst'], body),
                   _pdfTotalRow('Total', data['subtotal'], body),
-                  _pdfTotalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst'], body),
                   _pdfTotalRow('Advance', _displayAdvance(data), body),
-                  _pdfTotalRow('Discount', data['discount'], body),
+                  if (_toInt(data['discount']) > 0)
+                    _pdfTotalRow('Discount', data['discount'], body),
                   pw.Divider(),
                   _pdfTotalRow('Balance', data['balance'], bold),
                 ],

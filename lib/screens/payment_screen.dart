@@ -201,10 +201,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
             const SizedBox(height: 16),
 
             /// SUMMARY
-            _row('Total', total),
             _row('GST', gst),
+            _row('Total', total),
             _row('Advance', advance),
-            _row('Discount', discount),
+            if (discount > 0) _row('Discount', discount),
             const Divider(),
             _row('Balance', balance, bold: true),
 

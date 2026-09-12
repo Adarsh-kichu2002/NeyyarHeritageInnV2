@@ -63,15 +63,56 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         '/home',
         arguments: {'role': data!['role']},
       );
-    } on FirebaseAuthException {
+    } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+      final message = switch (e.code) {
+        'network-request-failed' =>
+          'No internet connection. Please check your network and try again.',
+        'wrong-password' ||
+        'user-not-found' ||
+        'invalid-credential' ||
+        'invalid-email' ||
+        'INVALID_LOGIN_CREDENTIALS' =>
+          'Invalid username or password',
+        'too-many-requests' =>
+          'Too many attempts. Please try again later.',
+        'user-disabled' => 'This account has been disabled',
+        _ => e.message?.isNotEmpty == true
+            ? e.message!
+            : 'Unable to sign in. Please try again.',
+      };
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid username or password')),
+        SnackBar(content: Text(message)),
       );
-    } catch (_) {
+    } on FirebaseException catch (e) {
       if (!mounted) return;
+      final isNetwork = e.code == 'unavailable' ||
+          e.code == 'network-request-failed' ||
+          (e.message?.toLowerCase().contains('network') ?? false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to sign in. Please try again.')),
+        SnackBar(
+          content: Text(
+            isNetwork
+                ? 'No internet connection. Please check your network and try again.'
+                : (e.message ?? 'Unable to sign in. Please try again.'),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final text = e.toString().toLowerCase();
+      final isNetwork = text.contains('socket') ||
+          text.contains('network') ||
+          text.contains('failed host lookup') ||
+          text.contains('connection');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isNetwork
+                ? 'No internet connection. Please check your network and try again.'
+                : 'Unable to sign in. Please try again.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoggingIn = false);

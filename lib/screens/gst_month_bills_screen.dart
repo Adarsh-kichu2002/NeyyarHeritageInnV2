@@ -197,6 +197,7 @@ class _GstMonthBillsScreenState extends State<GstMonthBillsScreen> {
                 ),
                 pw.SizedBox(height: 16),
                 pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Expanded(
                       child: pw.Column(
@@ -210,6 +211,19 @@ class _GstMonthBillsScreenState extends State<GstMonthBillsScreen> {
                             'Mob: ${data['phone1'] ?? ''}',
                             style: bodyStyle,
                           ),
+                          if ((data['address'] ?? '').toString().trim().isNotEmpty)
+                            pw.Text(
+                              data['address'].toString().trim(),
+                              style: bodyStyle,
+                            ),
+                          if ((data['customerGst'] ?? data['gstNo'] ?? '')
+                              .toString()
+                              .trim()
+                              .isNotEmpty)
+                            pw.Text(
+                              'GST: ${(data['customerGst'] ?? data['gstNo']).toString().trim()}',
+                              style: bodyStyle,
+                            ),
                         ],
                       ),
                     ),
@@ -235,9 +249,11 @@ class _GstMonthBillsScreenState extends State<GstMonthBillsScreen> {
                   border: pw.TableBorder.all(color: PdfColors.grey),
                   columnWidths: const {
                     0: pw.FlexColumnWidth(3),
-                    1: pw.FlexColumnWidth(2),
-                    2: pw.FlexColumnWidth(2),
-                    3: pw.FlexColumnWidth(2),
+                    1: pw.FlexColumnWidth(1.5),
+                    2: pw.FlexColumnWidth(1.2),
+                    3: pw.FlexColumnWidth(1.4),
+                    4: pw.FlexColumnWidth(1.4),
+                    5: pw.FlexColumnWidth(1.6),
                   },
                   children: [
                     pw.TableRow(
@@ -246,6 +262,8 @@ class _GstMonthBillsScreenState extends State<GstMonthBillsScreen> {
                         _pdfHeaderCell('Description'),
                         _pdfHeaderCell('Price'),
                         _pdfHeaderCell('Qty'),
+                        _pdfHeaderCell('GST (%)'),
+                        _pdfHeaderCell('GST'),
                         _pdfHeaderCell('Total'),
                       ],
                     ),
@@ -254,12 +272,25 @@ class _GstMonthBillsScreenState extends State<GstMonthBillsScreen> {
                           int.tryParse(i['qty']?.toString() ?? '') ?? 0;
                       final price =
                           int.tryParse(i['price']?.toString() ?? '') ?? 0;
+                      final net = qty * price;
+                      final gstPercent =
+                          int.tryParse(i['gstPercent']?.toString() ?? '') ?? 5;
+                      final gstAmount = i['gstAmount'] != null
+                          ? (int.tryParse(i['gstAmount']?.toString() ?? '') ??
+                              0)
+                          : (net * gstPercent / 100).round();
+                      final lineTotal = i['lineTotal'] != null
+                          ? (int.tryParse(i['lineTotal']?.toString() ?? '') ??
+                              net + gstAmount)
+                          : net + gstAmount;
                       return pw.TableRow(
                         children: [
                           _pdfCell(i['name'] ?? ''),
                           _pdfCell('₹$price'),
                           _pdfCell('$qty'),
-                          _pdfCell('₹${qty * price}'),
+                          _pdfCell('$gstPercent'),
+                          _pdfCell('₹$gstAmount'),
+                          _pdfCell('₹$lineTotal'),
                         ],
                       );
                     }),
@@ -284,14 +315,18 @@ class _GstMonthBillsScreenState extends State<GstMonthBillsScreen> {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.end,
                         children: [
+                          _pdfTotalRow('GST', data['gst'], bodyStyle),
                           _pdfTotalRow('Total', data['subtotal'], bodyStyle),
-                          _pdfTotalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst'], bodyStyle),
                           _pdfTotalRow('Advance', data['advance'], bodyStyle),
-                          _pdfTotalRow(
-                            'Discount',
-                            data['discount'],
-                            bodyStyle,
-                          ),
+                          if ((int.tryParse(
+                                      data['discount']?.toString() ?? '') ??
+                                  0) >
+                              0)
+                            _pdfTotalRow(
+                              'Discount',
+                              data['discount'],
+                              bodyStyle,
+                            ),
                           pw.Divider(),
                           _pdfTotalRow('Balance', data['balance'], boldStyle),
                         ],

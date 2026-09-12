@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:neyyar_heritage/history/bill_history_store.dart';
 import 'package:neyyar_heritage/history/confirm_store.dart';
+import 'package:neyyar_heritage/history/quotation_history_store.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -159,7 +160,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         setState(() => _selectedDay = null);
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Confirmed Quotations')),
+        appBar: AppBar(title: const Text('Bookings')),
         body: _selectedDay == null
             ? _buildCalendar(markedDates)
             : _buildDayDisplay(
@@ -275,7 +276,7 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
         ),
         Expanded(
           child: dayQuotations.isEmpty
-              ? const Center(child: Text('No Confirmed Quotations'))
+              ? const Center(child: Text('No Bookings'))
               : ListView.builder(
                   itemCount: dayQuotations.length,
                   itemBuilder: (context, index) {
@@ -408,10 +409,29 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
               IconButton(
                 icon: const Icon(Icons.visibility, color: Colors.green),
                 onPressed: () {
+                  final args = Map<String, dynamic>.from(q);
+                  args['isViewOnly'] = true;
+
+                  // Older confirmed docs may lack gstPercent — use original quotation.
+                  if (args['gstPercent'] == null) {
+                    final originalId =
+                        args['originalQuotationId']?.toString();
+                    if (originalId != null && originalId.isNotEmpty) {
+                      final originals =
+                          context.read<QuotationHistoryStore>().quotations;
+                      for (final original in originals) {
+                        if (original['id']?.toString() == originalId) {
+                          args['gstPercent'] = original['gstPercent'] ?? 18;
+                          break;
+                        }
+                      }
+                    }
+                  }
+
                   Navigator.pushNamed(
                     context,
                     '/quotation_preview_screen',
-                    arguments: q,
+                    arguments: args,
                   );
                 },
               ),

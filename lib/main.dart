@@ -93,7 +93,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      title: 'Neyyar Heritage Inn',
+      title: 'Neyyar Heritage Inn 2.0',
 
       theme: ThemeData(
         primaryColor: const Color(0xFFC8E6C9),

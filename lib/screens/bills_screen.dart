@@ -288,6 +288,7 @@ class _BillsScreenState extends State<BillsScreen> {
 
               /// PARTY INFO
               pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Expanded(
                     child: pw.Column(
@@ -301,6 +302,21 @@ class _BillsScreenState extends State<BillsScreen> {
 
                           style: bodyStyle,
                         ),
+
+                        if ((data['address'] ?? '').toString().trim().isNotEmpty)
+                          pw.Text(
+                            data['address'].toString().trim(),
+                            style: bodyStyle,
+                          ),
+
+                        if ((data['customerGst'] ?? data['gstNo'] ?? '')
+                            .toString()
+                            .trim()
+                            .isNotEmpty)
+                          pw.Text(
+                            'GST: ${(data['customerGst'] ?? data['gstNo']).toString().trim()}',
+                            style: bodyStyle,
+                          ),
                       ],
                     ),
                   ),
@@ -335,9 +351,11 @@ class _BillsScreenState extends State<BillsScreen> {
 
                 columnWidths: const {
                   0: pw.FlexColumnWidth(3),
-                  1: pw.FlexColumnWidth(2),
-                  2: pw.FlexColumnWidth(2),
-                  3: pw.FlexColumnWidth(2),
+                  1: pw.FlexColumnWidth(1.5),
+                  2: pw.FlexColumnWidth(1.2),
+                  3: pw.FlexColumnWidth(1.4),
+                  4: pw.FlexColumnWidth(1.4),
+                  5: pw.FlexColumnWidth(1.6),
                 },
 
                 children: [
@@ -348,6 +366,8 @@ class _BillsScreenState extends State<BillsScreen> {
                       _pdfHeaderCell('Description'),
                       _pdfHeaderCell('Price'),
                       _pdfHeaderCell('Qty'),
+                      _pdfHeaderCell('GST (%)'),
+                      _pdfHeaderCell('GST'),
                       _pdfHeaderCell('Total'),
                     ],
                   ),
@@ -358,6 +378,17 @@ class _BillsScreenState extends State<BillsScreen> {
                     final price =
                         int.tryParse(i['price']?.toString() ?? '') ?? 0;
 
+                    final net = qty * price;
+                    final gstPercent =
+                        int.tryParse(i['gstPercent']?.toString() ?? '') ?? 5;
+                    final gstAmount = i['gstAmount'] != null
+                        ? (int.tryParse(i['gstAmount']?.toString() ?? '') ?? 0)
+                        : (net * gstPercent / 100).round();
+                    final lineTotal = i['lineTotal'] != null
+                        ? (int.tryParse(i['lineTotal']?.toString() ?? '') ??
+                            net + gstAmount)
+                        : net + gstAmount;
+
                     return pw.TableRow(
                       children: [
                         _pdfCell(i['name'] ?? ''),
@@ -366,7 +397,11 @@ class _BillsScreenState extends State<BillsScreen> {
 
                         _pdfCell('$qty'),
 
-                        _pdfCell('₹${qty * price}'),
+                        _pdfCell('$gstPercent'),
+
+                        _pdfCell('₹$gstAmount'),
+
+                        _pdfCell('₹$lineTotal'),
                       ],
                     );
                   }),
@@ -400,13 +435,17 @@ class _BillsScreenState extends State<BillsScreen> {
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
 
                       children: [
-                        _pdfTotalRow('Total', data['subtotal'], bodyStyle),
+                        _pdfTotalRow('GST', data['gst'], bodyStyle),
 
-                        _pdfTotalRow('GST (${data['gstPercent'] ?? 18}%)', data['gst'], bodyStyle),
+                        _pdfTotalRow('Total', data['subtotal'], bodyStyle),
 
                         _pdfTotalRow('Advance', data['advance'], bodyStyle),
 
-                        _pdfTotalRow('Discount', data['discount'], bodyStyle),
+                        if ((int.tryParse(data['discount']?.toString() ?? '') ??
+                                0) >
+                            0)
+                          _pdfTotalRow(
+                              'Discount', data['discount'], bodyStyle),
 
                         pw.Divider(),
 

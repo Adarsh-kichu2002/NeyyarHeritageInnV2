@@ -4,13 +4,21 @@ import 'package:neyyar_heritage/widgets/list_filter_dialog.dart';
 import 'quotation_history_tab.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  const HistoryScreen({
+    super.key,
+    this.bottomPadding = 0,
+  });
+
+  /// Space reserved for the parent floating nav (Home shell).
+  final double bottomPadding;
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
+  static const Color _pageBg = Color(0xFFF4F7F5);
+
   ListFilterValues _quotationFilter = const ListFilterValues();
   ListFilterValues _billFilter = const ListFilterValues();
 
@@ -33,41 +41,83 @@ class _HistoryScreenState extends State<HistoryScreen> {
       length: 2,
       child: Builder(
         builder: (context) {
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text('History'),
-              actions: [
-                IconButton(
-                  tooltip: 'Filter',
-                  icon: const Icon(Icons.filter_list),
-                  onPressed: () {
-                    final index = DefaultTabController.of(context).index;
-                    _openFilter(index);
-                  },
-                ),
-              ],
-              bottom: const TabBar(
-                labelColor: Colors.black,
-                unselectedLabelColor: Colors.black54,
-                indicatorColor: Colors.black,
-                labelStyle: TextStyle(fontWeight: FontWeight.bold),
-                tabs: [
-                  Tab(text: 'Quotations'),
-                  Tab(text: 'Bills'),
-                ],
-              ),
-            ),
-            body: TabBarView(
+          // No nested Scaffold — avoids the white box under the floating nav.
+          return ColoredBox(
+            color: _pageBg,
+            child: Column(
               children: [
-                QuotationHistoryTab(
-                  customerName: _quotationFilter.customerName,
-                  from: _quotationFilter.from,
-                  to: _quotationFilter.to,
+                Material(
+                  color: _pageBg,
+                  elevation: 0,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        height: kToolbarHeight,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.only(left: 12),
+                                  child: Text(
+                                    'History',
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 20,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Filter',
+                                icon: const Icon(
+                                  Icons.filter_list,
+                                  color: Colors.black,
+                                ),
+                                onPressed: () {
+                                  final index =
+                                      DefaultTabController.of(context).index;
+                                  _openFilter(index);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const TabBar(
+                        labelColor: Colors.black,
+                        unselectedLabelColor: Colors.black54,
+                        indicatorColor: Colors.black,
+                        labelStyle: TextStyle(fontWeight: FontWeight.bold),
+                        tabs: [
+                          Tab(text: 'Quotations'),
+                          Tab(text: 'Bills'),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                BillHistoryTab(
-                  customerName: _billFilter.customerName,
-                  from: _billFilter.from,
-                  to: _billFilter.to,
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: widget.bottomPadding),
+                    child: TabBarView(
+                      children: [
+                        QuotationHistoryTab(
+                          customerName: _quotationFilter.customerName,
+                          from: _quotationFilter.from,
+                          to: _quotationFilter.to,
+                        ),
+                        BillHistoryTab(
+                          customerName: _billFilter.customerName,
+                          from: _billFilter.from,
+                          to: _billFilter.to,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),

@@ -1021,10 +1021,10 @@ Expanded(
     }
 
     final subtotal = _toInt(bill['subtotal']);
-    final gst = _toInt(bill['gst']);
     final discount = _toInt(bill['discount']);
     final balance = _toInt(bill['balance']);
-    final implied = subtotal + gst - discount - balance;
+    // subtotal already includes GST on new bills
+    final implied = subtotal - discount - balance;
     if (implied > 0) return implied;
 
     return 0;

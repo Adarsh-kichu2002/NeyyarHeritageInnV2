@@ -149,6 +149,9 @@ class GstStore extends ChangeNotifier {
         'name': i['name'],
         'qty': i['qty'],
         'price': i['price'],
+        'gstPercent': i['gstPercent'] ?? 5,
+        'gstAmount': i['gstAmount'] ?? 0,
+        'lineTotal': i['lineTotal'],
       };
     }).toList();
 
@@ -173,6 +176,8 @@ class GstStore extends ChangeNotifier {
       'customerName': bill['customerName'],
       'phone1': bill['phone1'],
       'phone2': bill['phone2'] ?? '',
+      'address': bill['address'] ?? '',
+      'customerGst': bill['customerGst'] ?? '',
       'items': cleanItems,
       'subtotal': bill['subtotal'],
       'gst': bill['gst'],

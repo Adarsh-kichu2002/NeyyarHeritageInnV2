@@ -98,6 +98,7 @@ class ConfirmStore extends ChangeNotifier {
           'extraPersonPrice': _toInt(data['extraPersonPrice']),
           'amount': _toInt(data['amount']),
           'total': _toInt(data['total'] ?? data['amount']),
+          'gstPercent': data['gstPercent'],
           'facilities': data['facilities'] ?? [],
           'createdAt': parseDate(data['createdAt']),
           'confirmedAt': parseDate(data['confirmedAt']),
@@ -187,6 +188,7 @@ class ConfirmStore extends ChangeNotifier {
       'extraPersonPrice': q['extraPersonPrice'] ?? 0,
       'amount': q['amount'] ?? 0,
       'total': q['total'] ?? 0,
+      'gstPercent': q['gstPercent'] ?? 18,
       'facilities': q['facilities'] ?? [],
       'rooms': q['rooms'] ?? [],
 
@@ -580,6 +582,8 @@ class ConfirmStore extends ChangeNotifier {
       'extraPersonPrice': updatedQuotation['extraPersonPrice'] ?? 0,
       'amount': updatedQuotation['amount'] ?? 0,
       'total': updatedQuotation['total'] ?? 0,
+      if (updatedQuotation.containsKey('gstPercent'))
+        'gstPercent': updatedQuotation['gstPercent'] ?? 18,
       'facilities': updatedQuotation['facilities'] ?? [],
       'rooms': updatedQuotation['rooms'] ?? [],
     };

@@ -48,10 +48,19 @@ class BillHistoryStore extends ChangeNotifier {
   /// 🧹 CLEAN ITEMS
   List<Map<String, dynamic>> _cleanItems(List items) {
     return items.map((i) {
+      final qty = i['qty'];
+      final price = i['price'];
+      final gstPercent = i['gstPercent'] ?? 5;
+      final gstAmount = i['gstAmount'] ?? 0;
+      final lineTotal = i['lineTotal'] ??
+          ((_toNum(qty) * _toNum(price) + _toNum(gstAmount)).round());
       return {
         'name': i['name'],
-        'qty': i['qty'],
-        'price': i['price'],
+        'qty': qty,
+        'price': price,
+        'gstPercent': gstPercent,
+        'gstAmount': gstAmount,
+        'lineTotal': lineTotal,
       };
     }).toList();
   }
@@ -71,15 +80,15 @@ class BillHistoryStore extends ChangeNotifier {
     final snap = await docRef.get();
 
     final subtotal = _toNum(bill['subtotal']);
-    final gst = _toNum(bill['gst']);
     final discount = _toNum(bill['discount']);
     final balance = _toNum(bill['balance']);
     var advance = _toNum(bill['advance']).round();
 
     // Older bills may have balance calculated with advance but advance field
     // stored as 0 or as a double that failed to display elsewhere.
-    if (advance <= 0 && subtotal + gst - discount - balance > 0) {
-      advance = (subtotal + gst - discount - balance).round();
+    // subtotal already includes GST on new bills
+    if (advance <= 0 && subtotal - discount - balance > 0) {
+      advance = (subtotal - discount - balance).round();
     }
 
     final cleanData = {

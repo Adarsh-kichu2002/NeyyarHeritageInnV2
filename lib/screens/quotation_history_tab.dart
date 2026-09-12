@@ -219,7 +219,10 @@ class _QuotationHistoryTabState
                 Navigator.pushNamed(
                   context,
                   '/quotation_preview_screen',
-                  arguments: q,
+                  arguments: {
+                    ...q,
+                    'isViewOnly': true,
+                  },
                 );
               },
             ),

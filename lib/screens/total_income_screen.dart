@@ -21,8 +21,17 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   DateTime? _from;
   DateTime? _to;
   String _paymentFilter = 'All';
+  String _packageFilter = 'All';
   bool _showAll = false;
   String _customerName = '';
+
+  static const List<String> _packages = [
+    'All',
+    'Stay',
+    'Stay Package',
+    'Day Out Package',
+    'Others',
+  ];
 
   @override
   void initState() {
@@ -170,6 +179,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
 
   Future<void> _openFilter() async {
     final payment = ValueNotifier<String>(_paymentFilter);
+    final package = ValueNotifier<String>(_packageFilter);
     final result = await showListFilterDialog(
       context,
       initial: ListFilterValues(
@@ -177,31 +187,64 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
         from: _from,
         to: _to,
       ),
-      extra: ValueListenableBuilder<String>(
-        valueListenable: payment,
-        builder: (_, value, __) {
-          return Wrap(
-            spacing: 8,
-            children: ['All', 'Advance', 'Final Bill'].map((filter) {
-              return ChoiceChip(
-                label: Text(filter),
-                selected: value == filter,
-                onSelected: (_) => payment.value = filter,
+      extra: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Payment type', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<String>(
+            valueListenable: payment,
+            builder: (_, value, __) {
+              return Wrap(
+                spacing: 8,
+                children: ['All', 'Advance', 'Final Bill'].map((filter) {
+                  return ChoiceChip(
+                    label: Text(filter),
+                    selected: value == filter,
+                    onSelected: (_) => payment.value = filter,
+                  );
+                }).toList(),
               );
-            }).toList(),
-          );
-        },
+            },
+          ),
+          const SizedBox(height: 16),
+          const Text('Package type', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<String>(
+            valueListenable: package,
+            builder: (_, value, __) {
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _packages.map((filter) {
+                  return ChoiceChip(
+                    label: Text(filter),
+                    selected: value == filter,
+                    onSelected: (_) => package.value = filter,
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
       ),
     );
     final selectedPayment = payment.value;
+    final selectedPackage = package.value;
     payment.dispose();
+    package.dispose();
     if (result == null || !mounted) return;
     setState(() {
       _customerName = result.customerName;
       _from = result.from;
       _to = result.to;
       _paymentFilter = selectedPayment;
-      _showAll = _from == null && _to == null && _customerName.isEmpty;
+      _packageFilter = selectedPackage;
+      _showAll = _from == null &&
+          _to == null &&
+          _customerName.isEmpty &&
+          _paymentFilter == 'All' &&
+          _packageFilter == 'All';
     });
   }
 
@@ -248,6 +291,9 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   List<_IncomeRecord> _filteredRecords(List<_IncomeRecord> records) {
     return records.where((record) {
       if (_paymentFilter != 'All' && record.type != _paymentFilter) return false;
+      if (_packageFilter != 'All' && record.packageName != _packageFilter) {
+        return false;
+      }
       if (_customerName.trim().isNotEmpty) {
         if (!record.guestName.toLowerCase().contains(
               _customerName.trim().toLowerCase(),

@@ -10,7 +10,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.neyyar_heritage"
+    namespace = "com.example.neyyar_heritage_2"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "27.0.12077973"
 
@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.neyyar_heritage"
+        applicationId = "com.example.neyyar_heritage_2"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
