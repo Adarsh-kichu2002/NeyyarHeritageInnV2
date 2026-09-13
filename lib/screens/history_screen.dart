@@ -103,19 +103,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(bottom: widget.bottomPadding),
-                    child: TabBarView(
-                      children: [
-                        QuotationHistoryTab(
-                          customerName: _quotationFilter.customerName,
-                          from: _quotationFilter.from,
-                          to: _quotationFilter.to,
-                        ),
-                        BillHistoryTab(
-                          customerName: _billFilter.customerName,
-                          from: _billFilter.from,
-                          to: _billFilter.to,
-                        ),
-                      ],
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        canvasColor: _pageBg,
+                        scaffoldBackgroundColor: _pageBg,
+                      ),
+                      child: TabBarView(
+                        children: [
+                          QuotationHistoryTab(
+                            customerName: _quotationFilter.customerName,
+                            from: _quotationFilter.from,
+                            to: _quotationFilter.to,
+                          ),
+                          BillHistoryTab(
+                            customerName: _billFilter.customerName,
+                            from: _billFilter.from,
+                            to: _billFilter.to,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

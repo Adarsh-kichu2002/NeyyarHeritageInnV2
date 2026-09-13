@@ -64,20 +64,28 @@ class _HomeScreenState extends State<HomeScreen> {
       onPopInvokedWithResult: (didPop, _) => _handleBack(didPop),
       child: Scaffold(
         backgroundColor: _pageBg,
-        extendBody: showNav,
-        bottomNavigationBar: showNav
-            ? Material(
-                type: MaterialType.transparency,
-                child: _floatingBottomNav(),
-              )
-            : null,
-        body: SafeArea(
-          bottom: !showNav,
-          child: role == 'staff'
-              ? _staffHome(context)
-              : (_currentIndex == 0
-                  ? _adminHome(context)
-                  : const HistoryScreen(bottomPadding: 100)),
+        // Overlay nav in a Stack — Scaffold's bottomNavigationBar slot
+        // was painting the full-width white band behind the pill.
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            SafeArea(
+              bottom: false,
+              child: role == 'staff'
+                  ? _staffHome(context)
+                  : (_currentIndex == 0
+                      ? _adminHome(context)
+                      : const HistoryScreen(bottomPadding: 100)),
+            ),
+            if (showNav)
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: SafeArea(
+                  top: false,
+                  child: _floatingBottomNav(),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -392,8 +400,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _floatingBottomNav() {
-    return SafeArea(
-      minimum: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
       child: Container(
         height: 64,
         decoration: BoxDecoration(
