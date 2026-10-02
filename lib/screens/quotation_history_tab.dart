@@ -13,11 +13,15 @@ class QuotationHistoryTab extends StatefulWidget {
     this.customerName = '',
     this.from,
     this.to,
+    this.bottomInset = 0,
   });
 
   final String customerName;
   final DateTime? from;
   final DateTime? to;
+
+  /// Scroll-only clearance for a parent floating nav (not structural padding).
+  final double bottomInset;
 
   @override
   State<QuotationHistoryTab> createState() =>
@@ -79,6 +83,9 @@ class _QuotationHistoryTabState
               : SingleChildScrollView(
                   scrollDirection:
                       Axis.vertical,
+                  padding: EdgeInsets.only(
+                    bottom: widget.bottomInset,
+                  ),
                   child:
                       SingleChildScrollView(
                     scrollDirection:

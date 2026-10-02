@@ -41,6 +41,15 @@ import 'screens/money_chart_screen.dart';
 import 'screens/money_report_screen.dart';
 import 'screens/total_income_screen.dart';
 
+import 'screens/restaurant_customer_screen.dart';
+import 'screens/restaurant_bill_items_screen.dart';
+import 'screens/restaurant_bill_preview_screen.dart';
+import 'screens/restaurant_item_management_screen.dart';
+import 'screens/restaurant_bills_screen.dart';
+import 'screens/restaurant_payment_screen.dart';
+import 'services/restaurant_bill_service.dart';
+import 'services/restaurant_item_service.dart';
+
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -77,6 +86,14 @@ class MyRoot extends StatelessWidget {
         ),
         ChangeNotifierProvider<GstStore>(
           create: (_) => GstStore(),
+          lazy: false,
+        ),
+        ChangeNotifierProvider<RestaurantBillStore>(
+          create: (_) => RestaurantBillStore(),
+          lazy: false,
+        ),
+        ChangeNotifierProvider<RestaurantItemStore>(
+          create: (_) => RestaurantItemStore(),
           lazy: false,
         ),
       ],
@@ -149,6 +166,15 @@ class MyApp extends StatelessWidget {
         '/money_chart': (_) => const MoneyChartScreen(),
         '/money_report': (_) => const MoneyReportScreen(),
         '/total_income': (_) => const TotalIncomeScreen(),
+
+        /// Restaurant Bill module (isolated from Homestay bills)
+        '/restaurant_customer': (_) => const RestaurantCustomerScreen(),
+        '/restaurant_bill_items': (_) => const RestaurantBillItemsScreen(),
+        '/restaurant_bill_preview': (_) => const RestaurantBillPreviewScreen(),
+        '/restaurant_item_management': (_) =>
+            const RestaurantItemManagementScreen(),
+        '/restaurant_bills': (_) => const RestaurantBillsScreen(),
+        '/restaurant_payment': (_) => const RestaurantPaymentScreen(),
       },
     );
   }

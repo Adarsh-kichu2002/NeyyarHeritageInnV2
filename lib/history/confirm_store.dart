@@ -6,6 +6,7 @@ class ConfirmStore extends ChangeNotifier {
 
   final List<Map<String, dynamic>> _confirmed = [];
   bool _isLoading = true;
+  final Set<String> _confirmInFlight = {};
 
   List<Map<String, dynamic>> get confirmedQuotations =>
       List.unmodifiable(_confirmed);
@@ -129,6 +130,9 @@ class ConfirmStore extends ChangeNotifier {
   }
 
   /// ➕ CONFIRM QUOTATION
+  ///
+  /// Uses the quotation id as the Firestore document id so the same quotation
+  /// can never create a second confirm doc (even under double-tap / multi-device races).
   Future<void> confirmQuotation(
     Map<String, dynamic> q, {
     required String advancePaymentMode,
@@ -136,72 +140,95 @@ class ConfirmStore extends ChangeNotifier {
     DateTime? advancePaymentDate,
     List<Map<String, dynamic>>? advancePayments,
   }) async {
-    final String quotationId = q['id'];
+    final String quotationId = (q['id'] ?? '').toString();
+    if (quotationId.isEmpty) return;
     if (isConfirmed(quotationId)) return;
+    if (_confirmInFlight.contains(quotationId)) return;
 
-    final payments = _firestoreAdvancePayments(
-      advancePayments,
-      fallbackAmount: _toDouble(q['advance']),
-      fallbackMode: advancePaymentMode,
-      fallbackRecordedBy: advanceRecordedBy,
-      fallbackPaidAt: advancePaymentDate,
-    );
-    final advance = payments.fold<double>(
-      0,
-      (sum, entry) => sum + _toDouble(entry['amount']),
-    );
-    final last = payments.isNotEmpty ? payments.last : null;
+    _confirmInFlight.add(quotationId);
+    try {
+      // Block legacy auto-id duplicates created by the old `.add()` path.
+      final existing = await _db
+          .collection('confirmed_quotations')
+          .where('originalQuotationId', isEqualTo: quotationId)
+          .limit(1)
+          .get();
+      if (existing.docs.isNotEmpty) return;
 
-    await _db.collection('confirmed_quotations').add({
-      'originalQuotationId': quotationId,
+      final payments = _firestoreAdvancePayments(
+        advancePayments,
+        fallbackAmount: _toDouble(q['advance']),
+        fallbackMode: advancePaymentMode,
+        fallbackRecordedBy: advanceRecordedBy,
+        fallbackPaidAt: advancePaymentDate,
+      );
+      final advance = payments.fold<double>(
+        0,
+        (sum, entry) => sum + _toDouble(entry['amount']),
+      );
+      final last = payments.isNotEmpty ? payments.last : null;
 
-      'customerName': q['customerName'],
-      'phone1': q['phone1'],
-      'phone2': q['phone2'] ?? '',
-      'advance': advance,
-      'advancePayments': payments,
-      'advancePaymentMode': last?['mode'] ?? advancePaymentMode,
-      'advanceRecordedBy': last?['recordedBy'] ?? advanceRecordedBy,
-      'advancePaymentDate': last?['paidAt'] ??
-          Timestamp.fromDate(_dateOnly(advancePaymentDate ?? DateTime.now())),
-      'address': q['address'] ?? '',
-      'package': q['package'],
+      final payload = <String, dynamic>{
+        'originalQuotationId': quotationId,
 
-      'checkInDate': q['checkInDate'] is DateTime
-          ? Timestamp.fromDate(q['checkInDate'])
-          : q['checkInDate'],
-      'checkOutDate': q['checkOutDate'] is DateTime
-          ? Timestamp.fromDate(q['checkOutDate'])
-          : q['checkOutDate'],
+        'customerName': q['customerName'],
+        'phone1': q['phone1'],
+        'phone2': q['phone2'] ?? '',
+        'advance': advance,
+        'advancePayments': payments,
+        'advancePaymentMode': last?['mode'] ?? advancePaymentMode,
+        'advanceRecordedBy': last?['recordedBy'] ?? advanceRecordedBy,
+        'advancePaymentDate': last?['paidAt'] ??
+            Timestamp.fromDate(_dateOnly(advancePaymentDate ?? DateTime.now())),
+        'address': q['address'] ?? '',
+        'package': q['package'],
 
-      'checkInTime': q['checkInTime'] ?? '',
-      'checkOutTime': q['checkOutTime'] ?? '',
+        'checkInDate': q['checkInDate'] is DateTime
+            ? Timestamp.fromDate(q['checkInDate'])
+            : q['checkInDate'],
+        'checkOutDate': q['checkOutDate'] is DateTime
+            ? Timestamp.fromDate(q['checkOutDate'])
+            : q['checkOutDate'],
 
-      'adult': q['adult'] ?? 0,
-      'children': q['children'] ?? 0,
-      'child': q['child'] ?? 0,
-      'totalPax': q['totalPax'] ?? 0,
+        'checkInTime': q['checkInTime'] ?? '',
+        'checkOutTime': q['checkOutTime'] ?? '',
 
-      'discount': q['discount'] ?? 0,
-      'extraPersons': q['extraPersons'] ?? 0,
-      'extraTotal': q['extraTotal'] ?? 0,
-      'extraPersonPrice': q['extraPersonPrice'] ?? 0,
-      'amount': q['amount'] ?? 0,
-      'total': q['total'] ?? 0,
-      'gstPercent': q['gstPercent'] ?? 18,
-      'facilities': q['facilities'] ?? [],
-      'rooms': q['rooms'] ?? [],
+        'adult': q['adult'] ?? 0,
+        'children': q['children'] ?? 0,
+        'child': q['child'] ?? 0,
+        'totalPax': q['totalPax'] ?? 0,
 
-      'createdAt': q['createdAt'] is DateTime
-          ? Timestamp.fromDate(q['createdAt'])
-          : q['createdAt'],
+        'discount': q['discount'] ?? 0,
+        'extraPersons': q['extraPersons'] ?? 0,
+        'extraTotal': q['extraTotal'] ?? 0,
+        'extraPersonPrice': q['extraPersonPrice'] ?? 0,
+        'amount': q['amount'] ?? 0,
+        'total': q['total'] ?? 0,
+        'gstPercent': q['gstPercent'] ?? 18,
+        'facilities': q['facilities'] ?? [],
+        'rooms': q['rooms'] ?? [],
 
-      // Bill status
-      'billGenerated': false,
-      'billId': null,
+        'createdAt': q['createdAt'] is DateTime
+            ? Timestamp.fromDate(q['createdAt'])
+            : q['createdAt'],
 
-      'confirmedAt': FieldValue.serverTimestamp(),
-    });
+        // Bill status
+        'billGenerated': false,
+        'billId': null,
+
+        'confirmedAt': FieldValue.serverTimestamp(),
+      };
+
+      // Deterministic doc id = quotation id → second create is a no-op.
+      final docRef = _db.collection('confirmed_quotations').doc(quotationId);
+      await _db.runTransaction((transaction) async {
+        final snap = await transaction.get(docRef);
+        if (snap.exists) return;
+        transaction.set(docRef, payload);
+      });
+    } finally {
+      _confirmInFlight.remove(quotationId);
+    }
   }
 
   Future<void> addAdvancePayment({

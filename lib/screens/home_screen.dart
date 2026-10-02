@@ -111,14 +111,41 @@ class _HomeScreenState extends State<HomeScreen> {
       _HomeAction(
         icon: Icons.receipt_long_outlined,
         title: 'Create Bill',
-        subtitle: 'Generate bills instantly',
+        subtitle: 'Create homestay bills',
         route: '/bill_screen',
       ),
       _HomeAction(
         icon: Icons.checklist_outlined,
         title: 'Bills',
-        subtitle: 'View and manage all bills',
+        subtitle: 'View homestay bills',
         route: '/bills_screen',
+      ),
+      _HomeAction(
+        icon: Icons.restaurant_outlined,
+        title: 'Create Restaurant Bill',
+        subtitle: 'Create restaurant bills',
+        route: '/restaurant_customer',
+        passRole: true,
+      ),
+      _HomeAction(
+        icon: Icons.ramen_dining_outlined,
+        title: 'Restaurant Bills',
+        subtitle: 'View restaurant bills',
+        route: '/restaurant_bills',
+        passRole: true,
+      ),
+      _HomeAction(
+        icon: Icons.restaurant_menu_outlined,
+        title: 'Manage Restaurant Items',
+        subtitle: 'Add and edit menu items',
+        route: '/restaurant_item_management',
+        passRole: true,
+      ),
+      _HomeAction(
+        icon: Icons.receipt_outlined,
+        title: 'GST',
+        subtitle: 'GST invoices and reports',
+        route: '/gst_screen',
       ),
       _HomeAction(
         icon: Icons.directions_car_outlined,
@@ -155,13 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: 'Total Income',
         subtitle: 'Track all income',
         route: '/total_income',
-      ),
-      _HomeAction(
-        icon: Icons.receipt_outlined,
-        title: 'GST',
-        subtitle: 'GST invoices and reports',
-        route: '/gst_screen',
-      ),
+      ), 
     ];
 
     return _homeScroll(context, actions);
@@ -181,8 +202,22 @@ class _HomeScreenState extends State<HomeScreen> {
       _HomeAction(
         icon: Icons.checklist_outlined,
         title: 'Bills',
-        subtitle: 'View and manage all bills',
+        subtitle: 'View homestay bills',
         route: '/bills_screen',
+      ),
+      _HomeAction(
+        icon: Icons.restaurant_outlined,
+        title: 'Create Restaurant Bill',
+        subtitle: 'Create restaurant bills',
+        route: '/restaurant_customer',
+        passRole: true,
+      ),
+      _HomeAction(
+        icon: Icons.ramen_dining_outlined,
+        title: 'Restaurant Bills',
+        subtitle: 'View restaurant bills',
+        route: '/restaurant_bills',
+        passRole: true,
       ),
       _HomeAction(
         icon: Icons.place_outlined,
@@ -331,7 +366,11 @@ class _HomeScreenState extends State<HomeScreen> {
       borderRadius: BorderRadius.circular(16),
       shadowColor: _forest.withValues(alpha: 0.12),
       child: InkWell(
-        onTap: () => Navigator.pushNamed(context, action.route),
+        onTap: () => Navigator.pushNamed(
+          context,
+          action.route,
+          arguments: action.passRole ? {'role': role} : null,
+        ),
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
@@ -490,11 +529,13 @@ class _HomeAction {
   final String title;
   final String subtitle;
   final String route;
+  final bool passRole;
 
   const _HomeAction({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.route,
+    this.passRole = false,
   });
 }

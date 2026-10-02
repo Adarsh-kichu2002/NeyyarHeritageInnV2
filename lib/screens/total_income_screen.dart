@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../history/bill_history_store.dart';
 import '../history/confirm_store.dart';
+import '/services/restaurant_bill_service.dart';
 import '../widgets/list_filter_dialog.dart';
 
 class TotalIncomeScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   DateTime? _to;
   String _paymentFilter = 'All';
   String _packageFilter = 'All';
+  String _billSourceFilter = 'All';
   bool _showAll = false;
   String _customerName = '';
 
@@ -31,6 +33,13 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
     'Stay Package',
     'Day Out Package',
     'Others',
+    'Restaurant',
+  ];
+
+  static const List<String> _billSources = [
+    'All',
+    'Homestay Bill',
+    'Restaurant Bill',
   ];
 
   @override
@@ -46,8 +55,13 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   Widget build(BuildContext context) {
     final store = context.watch<BillHistoryStore>();
     final confirmedStore = context.watch<ConfirmStore>();
+    final restaurantStore = context.watch<RestaurantBillStore>();
     final records = _filteredRecords(
-      _paymentRecords(store.bills, confirmedStore.confirmedQuotations),
+      _combinedPaymentRecords(
+        store.bills,
+        confirmedStore.confirmedQuotations,
+        restaurantStore.bills,
+      ),
     );
     final total = records.fold<double>(0, (sum, record) => sum + record.amount);
     final advanceTotal = records
@@ -75,7 +89,9 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
           ),
         ],
       ),
-      body: store.isLoading || confirmedStore.isLoading
+      body: store.isLoading ||
+              confirmedStore.isLoading ||
+              restaurantStore.isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
@@ -149,9 +165,15 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
                                                         color: Colors.green,
                                                       ),
                                                       onPressed: () {
+                                                        final isRestaurant =
+                                                            record.bill?[
+                                                                    'billSource'] ==
+                                                                'restaurant';
                                                         Navigator.pushNamed(
                                                           context,
-                                                          '/bill_preview',
+                                                          isRestaurant
+                                                              ? '/restaurant_bill_preview'
+                                                              : '/bill_preview',
                                                           arguments: {
                                                             ...record.bill!,
                                                             'isViewOnly': true,
@@ -180,6 +202,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   Future<void> _openFilter() async {
     final payment = ValueNotifier<String>(_paymentFilter);
     final package = ValueNotifier<String>(_packageFilter);
+    final billSource = ValueNotifier<String>(_billSourceFilter);
     final result = await showListFilterDialog(
       context,
       initial: ListFilterValues(
@@ -190,6 +213,25 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
       extra: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text('Bill source', style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          ValueListenableBuilder<String>(
+            valueListenable: billSource,
+            builder: (_, value, __) {
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _billSources.map((filter) {
+                  return ChoiceChip(
+                    label: Text(filter),
+                    selected: value == filter,
+                    onSelected: (_) => billSource.value = filter,
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
           const Text('Payment type', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           ValueListenableBuilder<String>(
@@ -231,8 +273,10 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
     );
     final selectedPayment = payment.value;
     final selectedPackage = package.value;
+    final selectedBillSource = billSource.value;
     payment.dispose();
     package.dispose();
+    billSource.dispose();
     if (result == null || !mounted) return;
     setState(() {
       _customerName = result.customerName;
@@ -240,11 +284,13 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
       _to = result.to;
       _paymentFilter = selectedPayment;
       _packageFilter = selectedPackage;
+      _billSourceFilter = selectedBillSource;
       _showAll = _from == null &&
           _to == null &&
           _customerName.isEmpty &&
           _paymentFilter == 'All' &&
-          _packageFilter == 'All';
+          _packageFilter == 'All' &&
+          _billSourceFilter == 'All';
     });
   }
 
@@ -305,6 +351,82 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
       if (_to != null && record.date.isAfter(DateTime(_to!.year, _to!.month, _to!.day, 23, 59, 59))) return false;
       return true;
     }).toList()..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  List<_IncomeRecord> _combinedPaymentRecords(
+    List<Map<String, dynamic>> bills,
+    List<Map<String, dynamic>> confirmedQuotations,
+    List<Map<String, dynamic>> restaurantBills,
+  ) {
+    final includeHomestay = _billSourceFilter != 'Restaurant Bill';
+    final includeRestaurant = _billSourceFilter != 'Homestay Bill';
+
+    final records = <_IncomeRecord>[];
+
+    if (includeHomestay) {
+      records.addAll(_paymentRecords(bills, confirmedQuotations));
+    }
+
+    if (includeRestaurant) {
+      for (final bill in restaurantBills) {
+        final payment = bill['payment'];
+        if (payment is! Map) continue;
+
+        final paidAmount = _amount(payment['paidAmount']);
+        if (paidAmount <= 0) continue;
+
+        final paymentDate = _dateValue(payment['paymentDate']) ??
+            _dateValue(payment['updatedAt']) ??
+            (bill['createdAt'] is DateTime
+                ? bill['createdAt'] as DateTime
+                : DateTime.now());
+        final recordedBy = _recordedBy(
+          payment['paymentRecordedBy'],
+          fallback: 'Not recorded',
+        );
+        final billRow = {
+          ...bill,
+          'billSource': 'restaurant',
+        };
+
+        const modes = {'gpay': 'GPay', 'cash': 'Cash', 'account': 'Account'};
+        var addedMode = false;
+        modes.forEach((key, label) {
+          final amount = _amount(payment[key]);
+          if (amount <= 0) return;
+          addedMode = true;
+          records.add(
+            _IncomeRecord(
+              guestName: (bill['customerName'] ?? '—').toString(),
+              packageName: 'Restaurant',
+              date: paymentDate,
+              type: 'Final Bill',
+              mode: label,
+              amount: amount,
+              recordedBy: recordedBy,
+              bill: billRow,
+            ),
+          );
+        });
+
+        if (!addedMode) {
+          records.add(
+            _IncomeRecord(
+              guestName: (bill['customerName'] ?? '—').toString(),
+              packageName: 'Restaurant',
+              date: paymentDate,
+              type: 'Final Bill',
+              mode: 'Restaurant',
+              amount: paidAmount,
+              recordedBy: recordedBy,
+              bill: billRow,
+            ),
+          );
+        }
+      }
+    }
+
+    return records;
   }
 
   List<_IncomeRecord> _paymentRecords(
@@ -391,8 +513,10 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
         final paymentDate = _dateValue(payment['paymentDate']) ??
             _dateValue(payment['updatedAt']) ??
             billDate;
-        final recordedBy =
-            (payment['paymentRecordedBy'] ?? 'Not recorded').toString();
+        final recordedBy = _recordedBy(
+          payment['paymentRecordedBy'],
+          fallback: 'Not recorded',
+        );
         const modes = {'gpay': 'GPay', 'cash': 'Cash', 'account': 'Account'};
         modes.forEach((key, label) {
           final amount = _amount(payment[key]);
@@ -412,6 +536,11 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
       }
     }
     return records;
+  }
+
+  String _recordedBy(dynamic value, {required String fallback}) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? fallback : text;
   }
 
   String _stayKey(Map<String, dynamic> data) {
@@ -437,7 +566,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
         return _AdvancePayment(
           amount: _amount(entry['amount']),
           mode: (entry['mode'] ?? 'Not recorded').toString(),
-          recordedBy: (entry['recordedBy'] ?? 'Admin').toString(),
+          recordedBy: _recordedBy(entry['recordedBy'], fallback: 'Admin'),
           date: _dateValue(entry['paidAt']) ??
               _dateValue(entry['recordedDate']) ??
               fallbackDate ??
@@ -450,8 +579,10 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
         amount: fallbackAmount,
         mode: (data['advancePaymentMode'] ?? data['advanceMode'] ?? 'Not recorded')
             .toString(),
-        recordedBy: (data['advanceRecordedBy'] ?? data['createdBy'] ?? 'Admin')
-            .toString(),
+        recordedBy: _recordedBy(
+          data['advanceRecordedBy'] ?? data['createdBy'],
+          fallback: 'Admin',
+        ),
         date: savedDate ?? fallbackDate ?? DateTime(2000),
       ),
     ];

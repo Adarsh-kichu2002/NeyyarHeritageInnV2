@@ -100,28 +100,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ],
                   ),
                 ),
+                // Match Home: full-height body; nav clearance is scroll inset only.
                 Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: widget.bottomPadding),
-                    child: Theme(
-                      data: Theme.of(context).copyWith(
-                        canvasColor: _pageBg,
-                        scaffoldBackgroundColor: _pageBg,
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      canvasColor: _pageBg,
+                      scaffoldBackgroundColor: _pageBg,
+                      colorScheme: Theme.of(context).colorScheme.copyWith(
+                        surface: _pageBg,
                       ),
-                      child: TabBarView(
-                        children: [
-                          QuotationHistoryTab(
-                            customerName: _quotationFilter.customerName,
-                            from: _quotationFilter.from,
-                            to: _quotationFilter.to,
-                          ),
-                          BillHistoryTab(
-                            customerName: _billFilter.customerName,
-                            from: _billFilter.from,
-                            to: _billFilter.to,
-                          ),
-                        ],
-                      ),
+                    ),
+                    child: TabBarView(
+                      children: [
+                        QuotationHistoryTab(
+                          customerName: _quotationFilter.customerName,
+                          from: _quotationFilter.from,
+                          to: _quotationFilter.to,
+                          bottomInset: widget.bottomPadding,
+                        ),
+                        BillHistoryTab(
+                          customerName: _billFilter.customerName,
+                          from: _billFilter.from,
+                          to: _billFilter.to,
+                          bottomInset: widget.bottomPadding,
+                        ),
+                      ],
                     ),
                   ),
                 ),

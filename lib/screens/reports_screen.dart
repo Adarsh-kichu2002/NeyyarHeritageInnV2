@@ -16,6 +16,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../history/bill_history_store.dart';
+import '/services/restaurant_bill_service.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -35,6 +36,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String selectedPackage = 'All';
   String selectedMonth = 'All';
   String selectedYear = 'All';
+  String selectedBillSource = 'All';
+
+  final List<String> billSources = [
+    'All',
+    'Homestay Bill',
+    'Restaurant Bill',
+  ];
 
   final List<String> packages = [
     'All',
@@ -42,6 +50,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     'Stay Package',
     'Day Out Package',
     'Others',
+    'Restaurant',
   ];
 
   final List<String> months = [
@@ -83,8 +92,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<BillHistoryStore>();
+    final restaurantStore = context.watch<RestaurantBillStore>();
 
-    if (store.isLoading) {
+    if (store.isLoading || restaurantStore.isLoading) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(),
@@ -92,13 +102,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
       );
     }
 
-    final filteredBills = store.bills.where((bill) {
+    final sourceBills = _sourceBills(store.bills, restaurantStore.bills);
+
+    final filteredBills = sourceBills.where((bill) {
       final payment = bill['payment'];
 
-      final paidAmount =
-          payment != null ? (payment['paidAmount'] ?? 0) : 0;
+      final paidAmount = payment is Map
+          ? _toInt(payment['paidAmount'])
+          : 0;
 
-      /// ONLY PAID BILLS
+      /// ONLY PAID BILLS (payment must have been entered)
       if (paidAmount <= 0) {
         return false;
       }
@@ -266,7 +279,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(10),
-            child: Row(
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _dropdown(
+                        selectedBillSource,
+                        billSources,
+                        (v) {
+                          setState(() {
+                            selectedBillSource = v ?? 'All';
+                          });
+                        },
+                        hint: 'Bill Source',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
                   children: [
                     Expanded(
                       child: _dropdown(
@@ -307,9 +339,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       ),
                     ),
                   ],
+                ),
+              ],
             ),
           ),
-
           /// TABLE WITH STICKY MONTH HEADER
 Expanded(
   child: ListView(
@@ -484,7 +517,7 @@ Expanded(
       /// Invoice No
       DataCell(
         Text(
-          '${bill['invoiceNo']}',
+          '${bill['invoiceNo'] ?? bill['billNumber'] ?? ''}',
         ),
       ),
 
@@ -676,7 +709,7 @@ Expanded(
         advance + paid;
 
     return [
-      '${bill['invoiceNo']}',
+      '${bill['invoiceNo'] ?? bill['billNumber'] ?? ''}',
       _fmt(
         _reportDate(bill),
       ),
@@ -991,7 +1024,40 @@ Expanded(
           _dateValue(payment['updatedAt']);
       if (paymentDate != null) return paymentDate;
     }
-    return _dateValue(bill['checkOutDate']);
+    return _dateValue(bill['checkOutDate']) ??
+        _dateValue(bill['createdAt']);
+  }
+
+  /// Homestay and Restaurant remain separate collections; combine only for reports.
+  List<Map<String, dynamic>> _sourceBills(
+    List<Map<String, dynamic>> homestay,
+    List<Map<String, dynamic>> restaurant,
+  ) {
+    if (selectedBillSource == 'Homestay Bill') {
+      return List<Map<String, dynamic>>.from(homestay);
+    }
+    if (selectedBillSource == 'Restaurant Bill') {
+      return restaurant.map(_asRestaurantReportRow).toList();
+    }
+    return [
+      ...homestay,
+      ...restaurant.map(_asRestaurantReportRow),
+    ];
+  }
+
+  Map<String, dynamic> _asRestaurantReportRow(Map<String, dynamic> bill) {
+    final total = _toInt(bill['grandTotal']);
+    // Keep the real `payment` map from Firestore. Do not invent paidAmount —
+    // unpaid restaurant bills must stay out of reports (same as homestay).
+    return {
+      ...bill,
+      'invoiceNo': bill['billNumber'],
+      'package': 'Restaurant',
+      'balance': total,
+      'advance': 0,
+      'checkOutDate': bill['createdAt'],
+      'billSource': 'restaurant',
+    };
   }
 
   DateTime? _dateValue(dynamic value) {

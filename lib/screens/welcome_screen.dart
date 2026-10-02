@@ -12,7 +12,11 @@ class WelcomeScreen extends StatefulWidget {
 class _WelcomeScreenState extends State<WelcomeScreen> {
   final TextEditingController usernameCtrl = TextEditingController();
   final TextEditingController passwordCtrl = TextEditingController();
+
   bool _isLoggingIn = false;
+
+  // Controls password visibility
+  bool _obscurePassword = true;
 
   // These are the usernames shown to staff. Firebase Authentication needs an
   // email address internally, so the app maps each displayed username to its
@@ -29,42 +33,59 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
     if (email == null || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid username and password')),
+        const SnackBar(
+          content: Text('Enter a valid username and password'),
+        ),
       );
       return;
     }
 
     setState(() => _isLoggingIn = true);
+
     try {
-      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final credential =
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(credential.user!.uid)
           .get();
+
       final data = userDoc.data();
 
       // An account must be explicitly marked active by an administrator.
-      if (!userDoc.exists || data?['active'] != true ||
+      if (!userDoc.exists ||
+          data?['active'] != true ||
           (data?['role'] != 'admin' && data?['role'] != 'staff')) {
         await FirebaseAuth.instance.signOut();
+
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This account is not authorised to use the app')),
+          const SnackBar(
+            content: Text(
+              'This account is not authorised to use the app',
+            ),
+          ),
         );
         return;
       }
 
       if (!mounted) return;
+
       Navigator.pushReplacementNamed(
         context,
         '/home',
-        arguments: {'role': data!['role']},
+        arguments: {
+          'role': data!['role'],
+        },
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+
       final message = switch (e.code) {
         'network-request-failed' =>
           'No internet connection. Please check your network and try again.',
@@ -81,14 +102,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ? e.message!
             : 'Unable to sign in. Please try again.',
       };
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(
+          content: Text(message),
+        ),
       );
     } on FirebaseException catch (e) {
       if (!mounted) return;
+
       final isNetwork = e.code == 'unavailable' ||
           e.code == 'network-request-failed' ||
           (e.message?.toLowerCase().contains('network') ?? false);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -100,11 +126,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+
       final text = e.toString().toLowerCase();
+
       final isNetwork = text.contains('socket') ||
           text.contains('network') ||
           text.contains('failed host lookup') ||
           text.contains('connection');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -115,7 +144,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         ),
       );
     } finally {
-      if (mounted) setState(() => _isLoggingIn = false);
+      if (mounted) {
+        setState(() => _isLoggingIn = false);
+      }
     }
   }
 
@@ -179,17 +210,33 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
                   const SizedBox(height: 20),
 
+                  /// PASSWORD FIELD
                   TextField(
                     controller: passwordCtrl,
-                    obscureText: true,
+                    obscureText: _obscurePassword,
                     enableSuggestions: false,
                     autocorrect: false,
-                    onSubmitted: (_) => _isLoggingIn ? null : _login(),
+                    onSubmitted: (_) =>
+                        _isLoggingIn ? null : _login(),
                     decoration: InputDecoration(
                       labelText: 'Password',
                       hintText: 'Enter password',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
+                      ),
+
+                      // Password visibility button
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
                       ),
                     ),
                   ),
@@ -202,7 +249,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     child: ElevatedButton(
                       onPressed: _isLoggingIn ? null : _login,
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -211,7 +260,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
                             )
                           : const Text(
                               'Login',

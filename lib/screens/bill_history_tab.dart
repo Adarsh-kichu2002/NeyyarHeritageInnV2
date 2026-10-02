@@ -9,11 +9,15 @@ class BillHistoryTab extends StatefulWidget {
     this.customerName = '',
     this.from,
     this.to,
+    this.bottomInset = 0,
   });
 
   final String customerName;
   final DateTime? from;
   final DateTime? to;
+
+  /// Scroll-only clearance for a parent floating nav (not structural padding).
+  final double bottomInset;
 
   @override
   State<BillHistoryTab> createState() => _BillHistoryTabState();
@@ -58,6 +62,7 @@ class _BillHistoryTabState extends State<BillHistoryTab> {
               ? const Center(child: Text('No bills found'))
               : SingleChildScrollView(
                   scrollDirection: Axis.vertical,
+                  padding: EdgeInsets.only(bottom: widget.bottomInset),
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
