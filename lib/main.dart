@@ -49,6 +49,8 @@ import 'screens/restaurant_bills_screen.dart';
 import 'screens/restaurant_payment_screen.dart';
 import 'services/restaurant_bill_service.dart';
 import 'services/restaurant_item_service.dart';
+import 'restaurant_reports/providers/restaurant_stock_provider.dart';
+import 'restaurant_reports/screens/restaurant_reports_screen.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -95,6 +97,11 @@ class MyRoot extends StatelessWidget {
         ChangeNotifierProvider<RestaurantItemStore>(
           create: (_) => RestaurantItemStore(),
           lazy: false,
+        ),
+        ChangeNotifierProvider<RestaurantStockProvider>(
+          create: (ctx) => RestaurantStockProvider(
+            billStore: ctx.read<RestaurantBillStore>(),
+          ),
         ),
       ],
       child: const MyApp(),
@@ -175,6 +182,7 @@ class MyApp extends StatelessWidget {
             const RestaurantItemManagementScreen(),
         '/restaurant_bills': (_) => const RestaurantBillsScreen(),
         '/restaurant_payment': (_) => const RestaurantPaymentScreen(),
+        '/restaurant_reports': (_) => const RestaurantReportsScreen(),
       },
     );
   }

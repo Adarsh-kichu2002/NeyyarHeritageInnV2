@@ -15,6 +15,15 @@ class RestaurantItemManagementScreen extends StatefulWidget {
 
 class _RestaurantItemManagementScreenState
     extends State<RestaurantItemManagementScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _showItemEditor({RestaurantItem? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final priceCtrl = TextEditingController(
@@ -138,6 +147,11 @@ class _RestaurantItemManagementScreenState
   @override
   Widget build(BuildContext context) {
     final store = context.watch<RestaurantItemStore>();
+    final query = _searchQuery.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final visibleItems = store.items.where((item) {
+      final name = item.name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      return query.isEmpty || name.contains(query);
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -162,39 +176,78 @@ class _RestaurantItemManagementScreenState
       ),
       body: store.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : store.items.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No restaurant items yet.\n+ Add Item',
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : ListView.separated(
-                  itemCount: store.items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final item = store.items[i];
-                    return ListTile(
-                      title: Text(item.name),
-                      subtitle: Text('₹${_money(item.price)}'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Edit',
-                            icon: const Icon(Icons.edit, color: Colors.blue),
-                            onPressed: () => _showItemEditor(existing: item),
-                          ),
-                          IconButton(
-                            tooltip: 'Delete',
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => _deleteItem(item),
-                          ),
-                        ],
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) => setState(() => _searchQuery = value),
+                    decoration: InputDecoration(
+                      hintText: 'Search restaurant items...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            ),
+                      filled: true,
+                      fillColor: const Color(0xFFF4F7F5),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
-                    );
-                  },
+                    ),
+                  ),
                 ),
+                Expanded(
+                  child: store.items.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No restaurant items yet.\n+ Add Item',
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      : visibleItems.isEmpty
+                          ? const Center(child: Text('No matching items found.'))
+                          : ListView.separated(
+                              itemCount: visibleItems.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (_, i) {
+                                final item = visibleItems[i];
+                                return ListTile(
+                                  title: Text(item.name),
+                                  subtitle: Text('₹${_money(item.price)}'),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'Edit',
+                                        icon: const Icon(Icons.edit,
+                                            color: Colors.blue),
+                                        onPressed: () =>
+                                            _showItemEditor(existing: item),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Delete',
+                                        icon: const Icon(Icons.delete,
+                                            color: Colors.red),
+                                        onPressed: () => _deleteItem(item),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                ),
+              ],
+            ),
     );
   }
 }

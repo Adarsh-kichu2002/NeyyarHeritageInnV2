@@ -139,6 +139,12 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
                                           (index) {
                                         final record = records[index];
                                         return DataRow(
+                                          color: record.bill?['billSource'] ==
+                                                  'restaurant'
+                                              ? MaterialStateProperty.all(
+                                                  const Color(0xFFFFE5E5),
+                                                )
+                                              : null,
                                           cells: [
                                             DataCell(Text('${index + 1}')),
                                             DataCell(Text(record.guestName)),

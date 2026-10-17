@@ -7,15 +7,29 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
     }
 
+    function isAdmin() {
+      return signedInAndActive()
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     // Employee profiles are managed in Firebase Console/Admin SDK only.
     match /users/{userId} {
       allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if false;
     }
 
+    // Staff can read menu items for billing; only admin can manage them.
+    match /restaurant_items/{itemId} {
+      allow read: if signedInAndActive();
+      allow write: if isAdmin();
+    }
+
+    // Stock entries are admin-only.
+    match /restaurant_stock_entries/{entryId} {
+      allow read, write: if isAdmin();
+    }
+
     // The old APK is not authenticated, so it is denied by this rule.
-    // Add more collection-specific restrictions here if staff permissions
-    // need to be narrower than the existing app's permissions.
     match /{document=**} {
       allow read, write: if signedInAndActive();
     }

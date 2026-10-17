@@ -439,11 +439,15 @@ class _BillsScreenState extends State<BillsScreen> {
 
                         _pdfTotalRow('Total', data['subtotal'], bodyStyle),
 
-                        _pdfTotalRow('Advance', data['advance'], bodyStyle),
+                        // Same advance resolution as individual Bill Preview
+                        // (raw field, advancePayments sum, or implied from totals).
+                        _pdfTotalRow(
+                          'Advance',
+                          _displayAdvance(data),
+                          bodyStyle,
+                        ),
 
-                        if ((int.tryParse(data['discount']?.toString() ?? '') ??
-                                0) >
-                            0)
+                        if (_toInt(data['discount']) > 0)
                           _pdfTotalRow(
                               'Discount', data['discount'], bodyStyle),
 
@@ -820,6 +824,37 @@ class _BillsScreenState extends State<BillsScreen> {
     );
   }
 
+  int _toInt(dynamic v, [int fallback = 0]) {
+    if (v == null) return fallback;
+    if (v is int) return v;
+    if (v is double) return v.round();
+    if (v is num) return v.round();
+    return int.tryParse(v.toString()) ?? fallback;
+  }
+
+  /// Matches Bill Preview: prefer advance field, then payments list, then implied.
+  int _displayAdvance(Map<String, dynamic> data) {
+    final direct = _toInt(data['advance']);
+    if (direct > 0) return direct;
+
+    final payments = data['advancePayments'];
+    if (payments is List) {
+      var total = 0;
+      for (final entry in payments) {
+        if (entry is Map) {
+          total += _toInt(entry['amount']);
+        }
+      }
+      if (total > 0) return total;
+    }
+
+    final subtotal = _toInt(data['subtotal']);
+    final discount = _toInt(data['discount']);
+    final balance = _toInt(data['balance']);
+    final implied = subtotal - discount - balance;
+    return implied > 0 ? implied : 0;
+  }
+
   String _fmt(DateTime? d) {
     if (d == null) {
       return '';
@@ -875,7 +910,7 @@ class _BillsScreenState extends State<BillsScreen> {
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
         pw.Text(label, style: style),
-        pw.Text('₹${int.tryParse(value?.toString() ?? '') ?? 0}', style: style),
+        pw.Text('₹${_toInt(value)}', style: style),
       ],
     );
   }

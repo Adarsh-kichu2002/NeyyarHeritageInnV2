@@ -36,6 +36,15 @@ class _HomeScreenState extends State<HomeScreen> {
   void _handleBack(bool didPop) {
     if (didPop) return;
 
+    // History is a tab inside this route, so the first back returns to Home.
+    // Start the exit confirmation fresh after returning to the Home tab.
+    if (_currentIndex != 0) {
+      _lastBackPress = null;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      setState(() => _currentIndex = 0);
+      return;
+    }
+
     final now = DateTime.now();
     final withinWindow = _lastBackPress != null &&
         now.difference(_lastBackPress!) <= const Duration(seconds: 2);
@@ -142,11 +151,13 @@ class _HomeScreenState extends State<HomeScreen> {
         passRole: true,
       ),
       _HomeAction(
-        icon: Icons.receipt_outlined,
-        title: 'GST',
-        subtitle: 'GST invoices and reports',
-        route: '/gst_screen',
+        icon: Icons.inventory_2_outlined,
+        title: 'Restaurant Reports',
+        subtitle: 'Stock management and reports',
+        route: '/restaurant_reports',
+        passRole: true,
       ),
+      
       _HomeAction(
         icon: Icons.directions_car_outlined,
         title: 'Create Itinerary',
@@ -183,6 +194,12 @@ class _HomeScreenState extends State<HomeScreen> {
         subtitle: 'Track all income',
         route: '/total_income',
       ), 
+      _HomeAction(
+        icon: Icons.receipt_outlined,
+        title: 'GST',
+        subtitle: 'GST invoices and reports',
+        route: '/gst_screen',
+      ),
     ];
 
     return _homeScroll(context, actions);
