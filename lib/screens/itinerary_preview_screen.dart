@@ -281,7 +281,6 @@ static String _to12Hr(String time) {
   /// ================= TABLE UI =================
 
  Widget _buildTable(Map<String, List<String>> groupedItems) {
-  const double rowHeight = 44;
   const double timeColumnWidth = 140; // slightly wider for single-line time
   int serial = 1;
 
@@ -308,17 +307,16 @@ static String _to12Hr(String time) {
       ...groupedItems.entries.map((entry) {
         final timeText = _to12Hr(entry.key);
         final items = entry.value;
-        final totalHeight = items.length * rowHeight;
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return IntrinsicHeight(
+          child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             /// ===== NO + ITEM COLUMN =====
             Expanded(
               child: Column(
                 children: List.generate(items.length, (index) {
                   return Container(
-                    height: rowHeight,
+                    constraints: const BoxConstraints(minHeight: 44),
                     decoration: const BoxDecoration(
                       border: Border(
                         left: BorderSide(color: Colors.black),
@@ -348,7 +346,6 @@ static String _to12Hr(String time) {
             /// ===== MERGED TIME COLUMN =====
             Container(
               width: timeColumnWidth,
-              height: totalHeight,
               decoration: const BoxDecoration(
                 border: Border(
                   left: BorderSide(color: Colors.black),
@@ -358,13 +355,10 @@ static String _to12Hr(String time) {
               ),
               child: Center(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                   child: Text(
                     timeText,
                     textAlign: TextAlign.center,
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.green,
                       fontWeight: FontWeight.w500,
@@ -375,7 +369,7 @@ static String _to12Hr(String time) {
               ),
             ),
           ],
-        );
+        ));
       }),
     ],
   );
@@ -395,7 +389,6 @@ Future<Uint8List> _buildExactPdf(
   );
 
   const PdfColor kDarkGreen = PdfColor.fromInt(0xFF34BF3B);
-  const double rowHeight = 30;
 
   int serial = 1;
 
@@ -485,174 +478,54 @@ Future<Uint8List> _buildExactPdf(
           'Guide Details: ${args['guideName'] ?? 'N/A'} - ${args['guidePhone'] ?? 'N/A'}',
         ),
 
-        /// ================= TABLE HEADER =================
-        pw.Row(
-  children: [
-
-    pw.Container(
-      width: 40,
-      height: 35,
-      alignment: pw.Alignment.center,
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          left: pw.BorderSide(),
-          top: pw.BorderSide(),
-          bottom: pw.BorderSide(),
-        ),
-        color: PdfColor.fromInt(0xFF34BF3B),
-      ),
-      child: pw.Text(
-        'No',
-        style: pw.TextStyle(
-          color: PdfColors.white,
-          fontWeight: pw.FontWeight.bold,
-        ),
-      ),
-    ),
-
-    pw.Container(width: 1, height: 35, color: PdfColors.black),
-
-    pw.Expanded(
-      child: pw.Container(
-        height: 35,
-        alignment: pw.Alignment.center,
-        decoration: const pw.BoxDecoration(
-          border: pw.Border(
-            top: pw.BorderSide(),
-            bottom: pw.BorderSide(),
-          ),
-          color: PdfColor.fromInt(0xFF34BF3B),
-        ),
-        child: pw.Text(
-          'Item',
-          style: pw.TextStyle(
-            color: PdfColors.white,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-      ),
-    ),
-
-    pw.Container(width: 1, height: 35, color: PdfColors.black),
-
-    pw.Container(
-      width: 140,
-      height: 35,
-      alignment: pw.Alignment.center,
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          right: pw.BorderSide(),
-          top: pw.BorderSide(),
-          bottom: pw.BorderSide(),
-        ),
-        color: PdfColor.fromInt(0xFF34BF3B),
-      ),
-      child: pw.Text(
-        'Time',
-        style: pw.TextStyle(
-          color: PdfColors.white,
-          fontWeight: pw.FontWeight.bold,
-        ),
-      ),
-    ),
-  ],
-),
-
-
-        /// ================= TABLE BODY =================
-...groupedItems.entries.map((entry) {
-  final timeText = _to12Hr(entry.key);
-  final items = entry.value;
-  final totalHeight = items.length * rowHeight;
-
-  return pw.Row(
-    crossAxisAlignment: pw.CrossAxisAlignment.start,
-    children: [
-
-      /// NO + ITEM COLUMN
-      pw.Expanded(
-        child: pw.Column(
-          children: List.generate(items.length, (index) {
-            return pw.Container(
-              height: rowHeight,
-              decoration: const pw.BoxDecoration(
-                border: pw.Border(
-                  left: pw.BorderSide(),
-                  bottom: pw.BorderSide(),
+        /// ================= PAGINATING ITINERARY TABLE =================
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.black),
+          columnWidths: {
+            0: const pw.FixedColumnWidth(40),
+            1: const pw.FlexColumnWidth(),
+            2: const pw.FixedColumnWidth(120),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: kDarkGreen),
+              children: ['No', 'Item', 'Time'].map((label) =>
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(8),
+                  child: pw.Text(label,
+                    textAlign: pw.TextAlign.center,
+                    style: pw.TextStyle(
+                      color: PdfColors.white,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
-              child: pw.Row(
-                children: [
-
-                  /// SL NO
-                  pw.Container(
-                    width: 40,
-                    alignment: pw.Alignment.center,
-                    child: pw.Text(
-                      (serial++).toString(),
-                      style: const pw.TextStyle(
-                        color: PdfColors.green,
-                      ),
-                    ),
-                  ),
-
-                  /// VERTICAL LINE
-                  pw.Container(
-                    width: 1,
-                    height: rowHeight,
-                    color: PdfColors.black,
-                  ),
-
-                  /// ITEM
-                  pw.Expanded(
-                    child: pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 6),
-                      child: pw.Text(
-                        items[index],
-                        style: const pw.TextStyle(
-                          color: PdfColors.green,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ),
-      ),
-
-      /// MERGED TIME COLUMN
-      pw.Container(
-        width: 140, // slightly wider for single-line time
-        height: totalHeight,
-        alignment: pw.Alignment.center,
-        decoration: const pw.BoxDecoration(
-          border: pw.Border(
-            left: pw.BorderSide(),
-            right: pw.BorderSide(),
-            bottom: pw.BorderSide(),
-          ),
-        ),
-        child: pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 6),
-          child: pw.FittedBox(
-            fit: pw.BoxFit.scaleDown, // prevents wrapping
-            child: pw.Text(
-              timeText,
-              maxLines: 1,
-              style: pw.TextStyle(
-                color: PdfColors.green,
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 10,
-              ),
+              ).toList(),
             ),
-          ),
+            for (final entry in groupedItems.entries)
+              for (final item in entry.value)
+                pw.TableRow(
+                  children: [
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text('${serial++}',
+                        style: const pw.TextStyle(color: PdfColors.green)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(item,
+                        style: const pw.TextStyle(color: PdfColors.green)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(_to12Hr(entry.key),
+                        textAlign: pw.TextAlign.center,
+                        style: const pw.TextStyle(color: PdfColors.green)),
+                    ),
+                  ],
+                ),
+          ],
         ),
-      ),
-    ],
-  );
-}),
 
 pw.SizedBox(height: 20),
 

@@ -1,4 +1,4 @@
-import '../models/restaurant_item_model.dart';
+import '../models/restaurant_report_item_model.dart';
 import '../models/stock_entry_model.dart';
 import '../models/stock_report_row.dart';
 import '../utils/restaurant_stock_utils.dart';

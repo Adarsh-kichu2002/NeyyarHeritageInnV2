@@ -547,12 +547,10 @@ Future<void> _loadConfirmedNames(DateTime date) async {
             ElevatedButton(
               onPressed: _saveData,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
                 minimumSize: const Size.fromHeight(45),
               ),
               child: const Text(
                 "Save",
-                style: TextStyle(color: Colors.white),
               ),
             ),
           ],

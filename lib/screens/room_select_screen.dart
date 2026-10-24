@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:neyyar_heritage/history/quotation_history_store.dart';
+import 'package:provider/provider.dart';
 
 class RoomSelectScreen extends StatefulWidget {
   const RoomSelectScreen({super.key});
@@ -47,6 +49,7 @@ class _RoomSelectScreenState extends State<RoomSelectScreen> {
   /// FACILITIES
   late List<String> facilities;
   final TextEditingController facilityCtrl = TextEditingController();
+  Future<void> _facilityOrderWrite = Future<void>.value();
 
   bool _initialized = false;
 
@@ -206,14 +209,50 @@ void didChangeDependencies() {
           /// FACILITIES
           const Text('Facilities',
               style: TextStyle(fontWeight: FontWeight.bold)),
-          ...facilities.map((f) => Row(children: [
-                const Text('• '),
-                Expanded(child: Text(f)),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  onPressed: () => setState(() => facilities.remove(f)),
-                )
-              ])),
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: facilities.length,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (newIndex > oldIndex) newIndex -= 1;
+                final facility = facilities.removeAt(oldIndex);
+                facilities.insert(newIndex, facility);
+              });
+              _persistFacilityOrder();
+            },
+            itemBuilder: (context, index) {
+              final facility = facilities[index];
+              return Container(
+                key: ValueKey('facility-$index-$facility'),
+                margin: const EdgeInsets.only(top: 8),
+                decoration: BoxDecoration(
+                  color: Colors.lightGreen.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(children: [
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(facility)),
+                  IconButton(
+                    tooltip: 'Remove facility',
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () {
+                      setState(() => facilities.removeAt(index));
+                      _persistFacilityOrder();
+                    },
+                  ),
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Icon(Icons.drag_handle, color: Colors.black54),
+                    ),
+                  ),
+                ]),
+              );
+            },
+          ),
           Row(children: [
             Expanded(
               child: TextField(
@@ -224,11 +263,12 @@ void didChangeDependencies() {
             IconButton(
               icon: const Icon(Icons.add),
               onPressed: () {
-                if (facilityCtrl.text.isEmpty) return;
+                if (facilityCtrl.text.trim().isEmpty) return;
                 setState(() {
                   facilities.add(facilityCtrl.text.trim());
                   facilityCtrl.clear();
                 });
+                _persistFacilityOrder();
               },
             )
           ]),
@@ -266,7 +306,8 @@ void didChangeDependencies() {
 
           /// PREVIEW
           ElevatedButton(
-  onPressed: () {
+  onPressed: () async {
+    await _facilityOrderWrite;
     /// 🔥 REMOVE CONTROLLERS BEFORE SENDING
     final cleanedRooms = rooms.map((r) {
       return {
@@ -288,7 +329,7 @@ void didChangeDependencies() {
         'extraTotal': extraTotal,
         'discount': discount,
         'gstPercent': gstPercent,
-        'facilities': facilities,
+        'facilities': List<String>.of(facilities),
         'total': grandTotal,
       },
     );
@@ -298,6 +339,33 @@ void didChangeDependencies() {
         ]),
       ),
     );
+  }
+
+  void _persistFacilityOrder() {
+    final quotationId = quotationData['quotationId']?.toString();
+    if (quotationData['mode'] != 'edit' ||
+        quotationId == null ||
+        quotationId.isEmpty) {
+      return;
+    }
+
+    final savedOrder = List<String>.of(facilities);
+    final historyStore = context.read<QuotationHistoryStore>();
+    _facilityOrderWrite = _facilityOrderWrite.then((_) async {
+      try {
+        await historyStore.updateQuotation(
+          quotationId,
+          {'facilities': savedOrder},
+        );
+      } catch (error) {
+        debugPrint('Error saving facility order: $error');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not save facility changes')),
+          );
+        }
+      }
+    });
   }
 
   @override

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/restaurant_item_model.dart';
+import '../models/restaurant_report_item_model.dart';
 import '../providers/restaurant_stock_provider.dart';
 
 /// Autocomplete search field for selecting a restaurant stock item.

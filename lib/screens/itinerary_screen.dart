@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:neyyar_heritage/screens/itinerary_history_tab.dart';
+import 'package:neyyar_heritage/widgets/list_filter_dialog.dart';
 
 class ItineraryScreen extends StatefulWidget {
   const ItineraryScreen({super.key});
@@ -12,29 +13,11 @@ class ItineraryScreen extends StatefulWidget {
 
 class _ItineraryScreenState extends State<ItineraryScreen> {
 
-  DateTime? selectedDate;
+  ListFilterValues _filters = const ListFilterValues();
 
-  /// Date Picker
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate ?? DateTime.now(),
-      firstDate: DateTime(2023),
-      lastDate: DateTime(2100),
-    );
-
-    if (picked != null) {
-      setState(() {
-        selectedDate = picked;
-      });
-    }
-  }
-
-  /// Clear filter
-  void _clearFilter() {
-    setState(() {
-      selectedDate = null;
-    });
+  Future<void> _openFilter() async {
+    final result = await showListFilterDialog(context, initial: _filters);
+    if (result != null && mounted) setState(() => _filters = result);
   }
 
   /// Firestore query based on filter
@@ -43,20 +26,27 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
         .collection('itineraries')
         .orderBy('date', descending: true);
 
-    if (selectedDate == null) return baseQuery;
+    if (_filters.from == null && _filters.to == null) return baseQuery;
 
-    final start = DateTime(
-        selectedDate!.year,
-        selectedDate!.month,
-        selectedDate!.day);
-
-    final end = start.add(const Duration(days: 1));
-
-    return FirebaseFirestore.instance
-        .collection('itineraries')
-        .where('date', isGreaterThanOrEqualTo: start)
-        .where('date', isLessThan: end)
-        .orderBy('date', descending: true);
+    Query<Map<String, dynamic>> query =
+        FirebaseFirestore.instance.collection('itineraries');
+    if (_filters.from != null) {
+      final from = DateTime(
+        _filters.from!.year,
+        _filters.from!.month,
+        _filters.from!.day,
+      );
+      query = query.where('date', isGreaterThanOrEqualTo: from);
+    }
+    if (_filters.to != null) {
+      final toExclusive = DateTime(
+        _filters.to!.year,
+        _filters.to!.month,
+        _filters.to!.day,
+      ).add(const Duration(days: 1));
+      query = query.where('date', isLessThan: toExclusive);
+    }
+    return query.orderBy('date', descending: true);
   }
 
   @override
@@ -67,28 +57,33 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
         title: const Text("Itineraries"),
         actions: [
           IconButton(
-            icon: const Icon(Icons.calendar_today),
-            onPressed: _pickDate,
+            tooltip: 'Filter by customer and dates',
+            icon: const Icon(Icons.filter_list),
+            onPressed: _openFilter,
           ),
-          if (selectedDate != null)
-            IconButton(
-              icon: const Icon(Icons.clear),
-              onPressed: _clearFilter,
-            )
         ],
       ),
 
       body: Column(
         children: [
 
-          /// Selected date indicator
-          if (selectedDate != null)
+          /// Active filter summary
+          if (_filters.customerName.isNotEmpty ||
+              _filters.from != null ||
+              _filters.to != null)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
-              color: Colors.orange.shade100,
+              color: const Color(0xFFC8E6C9),
               child: Text(
-                "Filtered Date : ${DateFormat('dd MMM yyyy').format(selectedDate!)}",
+                [
+                  if (_filters.customerName.isNotEmpty)
+                    'Customer: ${_filters.customerName}',
+                  if (_filters.from != null)
+                    'From: ${DateFormat('dd MMM yyyy').format(_filters.from!)}',
+                  if (_filters.to != null)
+                    'To: ${DateFormat('dd MMM yyyy').format(_filters.to!)}',
+                ].join('  •  '),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
@@ -110,16 +105,24 @@ class _ItineraryScreenState extends State<ItineraryScreen> {
     final docs = snapshot.data!.docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       final date = (data['date'] as Timestamp?)?.toDate();
+      final name = (data['name'] ?? '').toString().toLowerCase();
 
       if (date == null) return false;
 
-      /// If NO filter → hide past
-      if (selectedDate == null) {
+      final queryName = _filters.customerName.trim().toLowerCase();
+      if (queryName.isNotEmpty && !name.contains(queryName)) return false;
+
+      if (_filters.from == null && _filters.to == null &&
+          _filters.customerName.isEmpty) {
         final endOfDay = DateTime(date.year, date.month, date.day, 23, 59, 59);
         return now.isBefore(endOfDay);
       }
-
-      /// If filter applied → show all
+      if (_filters.from != null && date.isBefore(DateTime(
+        _filters.from!.year, _filters.from!.month, _filters.from!.day,
+      ))) return false;
+      if (_filters.to != null && date.isAfter(DateTime(
+        _filters.to!.year, _filters.to!.month, _filters.to!.day, 23, 59, 59,
+      ))) return false;
       return true;
     }).toList();
 

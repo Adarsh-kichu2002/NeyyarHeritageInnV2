@@ -127,6 +127,8 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
           price: line.price,
           gstPercent: line.gstPercent,
           taxable: line.taxable,
+          displayLineTotal:
+              line.taxable + (line.taxable * line.gstPercent / 100).round(),
           discountAllocated: allocated,
           discountedTaxable: discountedTaxable,
           gstAmount: gstAmount,
@@ -292,7 +294,7 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
               _Cell('${line.qty}'),
               _Cell('${line.gstPercent}'),
               // _Cell('₹${line.gstAmount}'),
-              _Cell('₹${line.lineTotal}'),
+              _Cell('₹${line.displayLineTotal}'),
             ],
           );
         }),
@@ -321,7 +323,16 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
               _totalRow('Total', totals.subtotal),
               _totalRow('Advance', totals.advance),
               if (totals.discountRequested > 0)
-                _totalRow('Discount', totals.discountRequested),
+                ...[
+                  _totalRow('Discount', totals.discountRequested),
+                  const Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Discount applied before GST',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                ],
               const Divider(),
               _totalRow('Balance', totals.balance, bold: true),
             ],
@@ -616,7 +627,7 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
                     _pdfCell('${line.qty}'),
                     _pdfCell('${line.gstPercent}'),
                     // _pdfCell('₹${line.gstAmount}'),
-                    _pdfCell('₹${line.lineTotal}'),
+                    _pdfCell('₹${line.displayLineTotal}'),
                   ],
                 );
               }),
@@ -648,8 +659,20 @@ class _BillPreviewScreenState extends State<BillPreviewScreen> {
                     _pdfTotalRow('Total', totals.subtotal, body),
                     _pdfTotalRow('Advance', totals.advance, body),
                     if (totals.discountRequested > 0)
-                      _pdfTotalRow(
-                          'Discount', totals.discountRequested, body),
+                      ...[
+                        _pdfTotalRow(
+                            'Discount', totals.discountRequested, body),
+                        pw.Align(
+                          alignment: pw.Alignment.centerRight,
+                          child: pw.Text(
+                            'Discount applied before GST',
+                            style: const pw.TextStyle(
+                              color: PdfColors.red,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ],
                     pw.Divider(),
                     _pdfTotalRow('Balance', totals.balance, bold),
                   ],
@@ -722,6 +745,7 @@ class _BillLineResult {
     required this.price,
     required this.gstPercent,
     required this.taxable,
+    required this.displayLineTotal,
     required this.discountAllocated,
     required this.discountedTaxable,
     required this.gstAmount,
@@ -733,6 +757,7 @@ class _BillLineResult {
   final int price;
   final int gstPercent;
   final int taxable;
+  final int displayLineTotal;
   final int discountAllocated;
   final int discountedTaxable;
   final int gstAmount;

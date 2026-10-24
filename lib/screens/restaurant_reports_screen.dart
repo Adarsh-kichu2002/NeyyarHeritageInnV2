@@ -137,8 +137,6 @@ class _RestaurantReportsScreenState extends State<RestaurantReportsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddStock,
-        backgroundColor: const Color(0xFF2E7D4F),
-        foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text('Add Stock'),
       ),

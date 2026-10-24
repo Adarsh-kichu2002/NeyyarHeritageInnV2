@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../models/restaurant_item_model.dart';
+import '../models/restaurant_report_item_model.dart';
 import '../models/stock_entry_model.dart';
 
 /// Firestore CRUD for restaurant stock items and stock entries.

@@ -1,4 +1,4 @@
-import 'restaurant_item_model.dart';
+import 'restaurant_report_item_model.dart';
 
 class StockReportRow {
   final RestaurantItemModel item;

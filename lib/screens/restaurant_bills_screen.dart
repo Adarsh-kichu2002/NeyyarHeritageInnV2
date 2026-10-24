@@ -114,10 +114,6 @@ class _RestaurantBillsScreenState extends State<RestaurantBillsScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete'),
           ),

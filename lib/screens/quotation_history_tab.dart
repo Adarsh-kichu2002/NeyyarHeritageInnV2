@@ -337,18 +337,10 @@ class _QuotationHistoryTabState
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
             onPressed: () => Navigator.pop(dialogContext, 'edit'),
             child: const Text('Edit'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
             onPressed: () => Navigator.pop(dialogContext, 'cancel'),
             child: const Text('Cancel Booking'),
           ),

@@ -49,8 +49,8 @@ import 'screens/restaurant_bills_screen.dart';
 import 'screens/restaurant_payment_screen.dart';
 import 'services/restaurant_bill_service.dart';
 import 'services/restaurant_item_service.dart';
-import 'restaurant_reports/providers/restaurant_stock_provider.dart';
-import 'restaurant_reports/screens/restaurant_reports_screen.dart';
+import 'providers/restaurant_stock_provider.dart';
+import 'screens/restaurant_reports_screen.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -121,6 +121,39 @@ class MyApp extends StatelessWidget {
 
       theme: ThemeData(
         primaryColor: const Color(0xFFC8E6C9),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFC8E6C9),
+          primary: const Color(0xFFC8E6C9),
+          onPrimary: Colors.black,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFC8E6C9),
+            foregroundColor: Colors.black,
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFC8E6C9),
+            foregroundColor: Colors.black,
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            backgroundColor: const Color(0xFFC8E6C9),
+            foregroundColor: Colors.black,
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            backgroundColor: const Color(0xFFC8E6C9),
+            foregroundColor: Colors.black,
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFFC8E6C9),
+          foregroundColor: Colors.black,
+        ),
         scaffoldBackgroundColor: Colors.white,
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFFC8E6C9),

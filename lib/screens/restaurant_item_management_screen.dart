@@ -166,12 +166,9 @@ class _RestaurantItemManagementScreenState
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showItemEditor(),
-        backgroundColor: const Color(0xFF2E7D4F),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add, color: Colors.white),
+        icon: const Icon(Icons.add),
         label: const Text(
           'Add Item',
-          style: TextStyle(color: Colors.white),
         ),
       ),
       body: store.isLoading

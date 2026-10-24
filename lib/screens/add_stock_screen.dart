@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/restaurant_item_model.dart';
+import '../models/restaurant_report_item_model.dart';
 import '../providers/restaurant_stock_provider.dart';
 import '../utils/restaurant_stock_utils.dart';
 import '../widgets/item_search_field.dart';
@@ -117,7 +117,8 @@ class _AddStockScreenState extends State<AddStockScreen> {
               ItemSearchField(
                 key: ValueKey(_selectedItem?.id ?? 'item-search'),
                 selectedItem: _selectedItem,
-                onItemSelected: (item) => setState(() => _selectedItem = item),
+                onItemSelected: (item) =>
+                  setState(() => _selectedItem = item as RestaurantItemModel?),
                 onCreateNew: _createNewItem,
               ),
               const SizedBox(height: 16),
@@ -163,8 +164,6 @@ class _AddStockScreenState extends State<AddStockScreen> {
                       )
                     : const Text('Add Stock'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D4F),
-                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
               ),
