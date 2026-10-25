@@ -105,6 +105,70 @@ class QuotationHistoryStore extends ChangeNotifier {
         .update(dataToUpdate);
   }
 
+  Future<void> updateStatus(String quotationId, String status) async {
+    final quotationRef = _db.collection('quotations').doc(quotationId);
+    final quotationSnapshot = await quotationRef.get();
+    final quotation = quotationSnapshot.data() ?? const <String, dynamic>{};
+    await quotationRef.update({
+      'status': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    // Keep a confirmed booking visible to Total Income and synchronize only
+    // its status; payment amounts and paidAt timestamps remain untouched.
+    final confirmation = _db.collection('confirmed_quotations').doc(quotationId);
+    final snapshot = await confirmation.get();
+    if (snapshot.exists) await confirmation.update({'status': status});
+
+    if (status == 'cancelled' || status == 'postponed') {
+      await _removeBookingFromRoomCharts(quotation);
+    }
+  }
+
+  Future<void> _removeBookingFromRoomCharts(Map<String, dynamic> quotation) async {
+    DateTime? dateOf(dynamic value) {
+      if (value is Timestamp) return value.toDate();
+      if (value is DateTime) return value;
+      return null;
+    }
+
+    final checkIn = dateOf(quotation['checkInDate']);
+    final checkOut = dateOf(quotation['checkOutDate']);
+    final customerName = quotation['customerName']?.toString().trim().toLowerCase();
+    if (checkIn == null || checkOut == null || customerName == null || customerName.isEmpty) return;
+
+    final firstDay = DateTime(checkIn.year, checkIn.month, checkIn.day);
+    final lastDay = DateTime(checkOut.year, checkOut.month, checkOut.day);
+    final batch = _db.batch();
+    var hasWrites = false;
+
+    for (var day = firstDay; !day.isAfter(lastDay); day = day.add(const Duration(days: 1))) {
+      final id = '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+      final ref = _db.collection('room_occupancy').doc(id);
+      final roomDay = await ref.get();
+      if (!roomDay.exists) continue;
+      final rawRooms = roomDay.data()?['rooms'];
+      if (rawRooms is! Map) continue;
+      final rooms = Map<String, dynamic>.from(rawRooms);
+      final matchingRooms = rooms.entries
+          .where((entry) => entry.value is Map &&
+              (entry.value['name']?.toString().trim().toLowerCase() == customerName))
+          .map((entry) => entry.key)
+          .toList();
+      if (matchingRooms.isEmpty) continue;
+      for (final room in matchingRooms) {
+        rooms.remove(room);
+      }
+      if (rooms.isEmpty) {
+        batch.delete(ref);
+      } else {
+        batch.update(ref, {'rooms': rooms});
+      }
+      hasWrites = true;
+    }
+
+    if (hasWrites) await batch.commit();
+  }
+
   /// ❌ DELETE QUOTATION
   Future<void> deleteQuotation(String quotationId) async {
     await _db.collection('quotations').doc(quotationId).delete();

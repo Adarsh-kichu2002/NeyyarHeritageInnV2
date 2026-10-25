@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../utils/restaurant_stock_utils.dart';
+
 class StockFilterValues {
   const StockFilterValues({
     this.itemQuery = '',
@@ -16,17 +18,20 @@ class StockFilterValues {
 Future<StockFilterValues?> showStockFilterDialog(
   BuildContext context, {
   required StockFilterValues initial,
+  List<String> itemNames = const [],
 }) {
   return showDialog<StockFilterValues>(
     context: context,
-    builder: (dialogContext) => _StockFilterDialog(initial: initial),
+    builder: (dialogContext) =>
+        _StockFilterDialog(initial: initial, itemNames: itemNames),
   );
 }
 
 class _StockFilterDialog extends StatefulWidget {
-  const _StockFilterDialog({required this.initial});
+  const _StockFilterDialog({required this.initial, required this.itemNames});
 
   final StockFilterValues initial;
+  final List<String> itemNames;
 
   @override
   State<_StockFilterDialog> createState() => _StockFilterDialogState();
@@ -34,6 +39,7 @@ class _StockFilterDialog extends StatefulWidget {
 
 class _StockFilterDialogState extends State<_StockFilterDialog> {
   late final TextEditingController _itemController;
+  late final FocusNode _itemFocusNode;
   DateTime? _from;
   DateTime? _to;
 
@@ -41,6 +47,7 @@ class _StockFilterDialogState extends State<_StockFilterDialog> {
   void initState() {
     super.initState();
     _itemController = TextEditingController(text: widget.initial.itemQuery);
+    _itemFocusNode = FocusNode();
     _from = widget.initial.from;
     _to = widget.initial.to;
   }
@@ -48,6 +55,7 @@ class _StockFilterDialogState extends State<_StockFilterDialog> {
   @override
   void dispose() {
     _itemController.dispose();
+    _itemFocusNode.dispose();
     super.dispose();
   }
 
@@ -59,21 +67,8 @@ class _StockFilterDialogState extends State<_StockFilterDialog> {
       initialDate: (isFrom ? _from : _to) ?? DateTime.now(),
     );
     if (selected == null) return;
-    final selectedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(
-        (isFrom ? _from : _to) ?? DateTime.now(),
-      ),
-    );
-    if (selectedTime == null) return;
     setState(() {
-      final value = DateTime(
-        selected.year,
-        selected.month,
-        selected.day,
-        selectedTime.hour,
-        selectedTime.minute,
-      );
+      final value = DateTime(selected.year, selected.month, selected.day);
       if (isFrom) {
         _from = value;
       } else {
@@ -90,13 +85,56 @@ class _StockFilterDialogState extends State<_StockFilterDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: _itemController,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(
-                labelText: 'Search / Item',
-                border: OutlineInputBorder(),
-              ),
+            RawAutocomplete<String>(
+              textEditingController: _itemController,
+              focusNode: _itemFocusNode,
+              optionsBuilder: (value) {
+                final query = normalizeItemName(value.text);
+                if (query.isEmpty) return const <String>[];
+                return widget.itemNames
+                    .where((name) => matchesItemSearch(name, query))
+                    .take(8);
+              },
+              optionsViewBuilder: (context, onSelected, options) {
+                final matches = options.toList();
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: Material(
+                    elevation: 6,
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight: 220,
+                        maxWidth: 300,
+                      ),
+                      child: ListView.separated(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        itemCount: matches.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1),
+                        itemBuilder: (_, index) => ListTile(
+                          dense: true,
+                          title: Text(matches[index]),
+                          onTap: () => onSelected(matches[index]),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+              fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                return TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Search / Item',
+                    border: OutlineInputBorder(),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 12),
             Row(
@@ -107,7 +145,7 @@ class _StockFilterDialogState extends State<_StockFilterDialog> {
                     child: Text(
                       _from == null
                           ? 'From Date'
-                          : DateFormat('dd/MM/yy HH:mm').format(_from!),
+                          : DateFormat('dd/MM/yyyy').format(_from!),
                     ),
                   ),
                 ),
@@ -118,7 +156,7 @@ class _StockFilterDialogState extends State<_StockFilterDialog> {
                     child: Text(
                       _to == null
                           ? 'To Date'
-                          : DateFormat('dd/MM/yy HH:mm').format(_to!),
+                          : DateFormat('dd/MM/yyyy').format(_to!),
                     ),
                   ),
                 ),

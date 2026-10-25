@@ -17,6 +17,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import '../history/bill_history_store.dart';
 import '/services/restaurant_bill_service.dart';
+import '../utils/booking_status.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -512,6 +513,7 @@ Expanded(
       advance + paid;
 
   return DataRow(
+    color: WidgetStatePropertyAll(bill['billSource'] == 'restaurant' ? BookingStatus.color('restaurant_bill') : BookingStatus.color(bill['status']?.toString())),
     cells: [
 
       /// Invoice No

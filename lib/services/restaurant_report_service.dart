@@ -77,12 +77,84 @@ class RestaurantReportService {
       from: from,
       to: to,
     );
+    final balance = calculateBalanceForItem(
+      itemId: item.id,
+      itemName: item.name,
+      entries: entries,
+      bills: bills,
+      from: from,
+      to: to,
+    );
     return StockReportRow(
       item: item,
       totalAdded: added,
       totalSold: sold,
-      balance: added - sold,
+      balance: balance,
     );
+  }
+
+  /// Calculates the balance in chronological order. A stock entry clears a
+  /// negative balance before establishing the new available stock amount.
+  int calculateBalanceForItem({
+    required String itemId,
+    required String itemName,
+    required List<StockEntryModel> entries,
+    required List<Map<String, dynamic>> bills,
+    DateTime? from,
+    DateTime? to,
+  }) {
+    final events = <({DateTime date, int quantity, bool isSale})>[];
+    for (final entry in entries) {
+      if (entry.itemId != itemId ||
+          !isWithinDateRange(entry.date, from: from, to: to)) {
+        continue;
+      }
+      events.add((date: entry.date, quantity: entry.quantity, isSale: false));
+    }
+
+    final normalizedName = normalizeItemName(itemName);
+    for (final bill in bills) {
+      final createdAt = bill['createdAt'];
+      if (createdAt is! DateTime ||
+          !isWithinDateRange(createdAt, from: from, to: to)) {
+        continue;
+      }
+      final rawItems = bill['items'] as List? ?? const [];
+      for (final raw in rawItems) {
+        if (raw is! Map) continue;
+        final item = Map<String, dynamic>.from(raw);
+        final quantity = _toInt(item['quantity'] ?? item['qty']);
+        if (quantity <= 0) continue;
+
+        final masterId = item['masterItemId']?.toString();
+        final matches = masterId != null && masterId.isNotEmpty
+            ? masterId == itemId
+            : normalizeItemName(
+                    (item['itemName'] ?? item['name'] ?? '').toString()) ==
+                normalizedName;
+        if (matches) {
+          events.add((date: createdAt, quantity: quantity, isSale: true));
+        }
+      }
+    }
+
+    events.sort((a, b) {
+      final byDate = a.date.compareTo(b.date);
+      if (byDate != 0) return byDate;
+      // Treat same-time sales as occurring before a stock delivery.
+      if (a.isSale == b.isSale) return 0;
+      return a.isSale ? -1 : 1;
+    });
+
+    var balance = 0;
+    for (final event in events) {
+      if (event.isSale) {
+        balance -= event.quantity;
+      } else {
+        balance = balance < 0 ? event.quantity : balance + event.quantity;
+      }
+    }
+    return balance;
   }
 
   List<StockReportRow> buildReportRows({

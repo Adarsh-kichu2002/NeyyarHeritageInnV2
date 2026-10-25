@@ -8,8 +8,12 @@ class ConfirmStore extends ChangeNotifier {
   bool _isLoading = true;
   final Set<String> _confirmInFlight = {};
 
-  List<Map<String, dynamic>> get confirmedQuotations =>
+  List<Map<String, dynamic>> get allConfirmedQuotations =>
       List.unmodifiable(_confirmed);
+
+  List<Map<String, dynamic>> get confirmedQuotations =>
+      List.unmodifiable(_confirmed.where((q) =>
+          q['status'] != 'cancelled' && q['status'] != 'postponed'));
 
   bool get isLoading => _isLoading;
 
@@ -105,6 +109,7 @@ class ConfirmStore extends ChangeNotifier {
           'confirmedAt': parseDate(data['confirmedAt']),
           'billGenerated': data['billGenerated'] ?? false,
           'billId': data['billId'],
+          'status': data['status'],
         });
       }
 

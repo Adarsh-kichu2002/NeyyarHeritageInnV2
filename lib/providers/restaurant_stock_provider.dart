@@ -111,6 +111,12 @@ class RestaurantStockProvider extends ChangeNotifier {
         filterItemQuery: _filterItemQuery,
       );
 
+  /// One summary row for every item with stock or sales activity in range.
+  List<StockReportRow> get visibleReportRows => reportRows.where((row) {
+        return _activitiesForItem(row.item).any((activity) =>
+            isWithinDateRange(activity.date, from: _fromDate, to: _toDate));
+      }).toList();
+
   StockSummaryData get summary => _reportService.buildSummary(reportRows);
 
   void setSearchQuery(String query) {
@@ -136,13 +142,14 @@ class RestaurantStockProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Clears report-only search and date filters without rebuilding listeners.
-  /// Used when the reports route is being disposed.
+  /// Resets report search and the date range to today without rebuilding
+  /// listeners. Used on entry and when the reports route is disposed.
   void resetReportView() {
     _searchQuery = '';
     _filterItemQuery = '';
-    _fromDate = null;
-    _toDate = null;
+    final today = DateTime.now();
+    _fromDate = DateTime(today.year, today.month, today.day);
+    _toDate = _fromDate;
   }
 
   List<RestaurantItemModel> searchItemsForAutocomplete(String query) {
@@ -164,7 +171,10 @@ class RestaurantStockProvider extends ChangeNotifier {
   List<StockActivity> stockHistoryForItem(String itemId) {
     final item = _items.where((item) => item.id == itemId).firstOrNull;
     if (item == null) return const [];
-    return _activitiesForItem(item).toList()
+    return _activitiesForItem(item)
+        .where((activity) =>
+            isWithinDateRange(activity.date, from: _fromDate, to: _toDate))
+        .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }
 

@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 
 import '../history/bill_history_store.dart';
 import '../history/confirm_store.dart';
+import '../history/quotation_history_store.dart';
+import '../utils/booking_status.dart';
 import '/services/restaurant_bill_service.dart';
 import '../widgets/list_filter_dialog.dart';
 
@@ -40,6 +42,8 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
     'All',
     'Homestay Bill',
     'Restaurant Bill',
+    'Cancelled',
+    'Postponed',
   ];
 
   @override
@@ -55,12 +59,14 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   Widget build(BuildContext context) {
     final store = context.watch<BillHistoryStore>();
     final confirmedStore = context.watch<ConfirmStore>();
+    final quotationStore = context.watch<QuotationHistoryStore>();
     final restaurantStore = context.watch<RestaurantBillStore>();
     final records = _filteredRecords(
       _combinedPaymentRecords(
         store.bills,
-        confirmedStore.confirmedQuotations,
+        confirmedStore.allConfirmedQuotations,
         restaurantStore.bills,
+        quotationStore.quotations,
       ),
     );
     final total = records.fold<double>(0, (sum, record) => sum + record.amount);
@@ -139,12 +145,13 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
                                           (index) {
                                         final record = records[index];
                                         return DataRow(
-                                          color: record.bill?['billSource'] ==
-                                                  'restaurant'
-                                              ? MaterialStateProperty.all(
-                                                  const Color(0xFFFFE5E5),
-                                                )
-                                              : null,
+                                          color: WidgetStatePropertyAll(
+                                            record.bill?['billSource'] == 'restaurant'
+                                                ? BookingStatus.color('restaurant_bill')
+                                                : (record.status == BookingStatus.cancelled || record.status == BookingStatus.postponed)
+                                                    ? BookingStatus.color(record.status)
+                                                    : null,
+                                          ),
                                           cells: [
                                             DataCell(Text('${index + 1}')),
                                             DataCell(Text(record.guestName)),
@@ -221,59 +228,15 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
         children: [
           const Text('Bill source', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          ValueListenableBuilder<String>(
-            valueListenable: billSource,
-            builder: (_, value, __) {
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _billSources.map((filter) {
-                  return ChoiceChip(
-                    label: Text(filter),
-                    selected: value == filter,
-                    onSelected: (_) => billSource.value = filter,
-                  );
-                }).toList(),
-              );
-            },
-          ),
+          ValueListenableBuilder<String>(valueListenable: billSource, builder: (_, value, __) => DropdownButtonFormField<String>(value: value, items: _billSources.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) { if (v != null) billSource.value = v; }, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true))),
           const SizedBox(height: 16),
           const Text('Payment type', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          ValueListenableBuilder<String>(
-            valueListenable: payment,
-            builder: (_, value, __) {
-              return Wrap(
-                spacing: 8,
-                children: ['All', 'Advance', 'Final Bill'].map((filter) {
-                  return ChoiceChip(
-                    label: Text(filter),
-                    selected: value == filter,
-                    onSelected: (_) => payment.value = filter,
-                  );
-                }).toList(),
-              );
-            },
-          ),
+          ValueListenableBuilder<String>(valueListenable: payment, builder: (_, value, __) => DropdownButtonFormField<String>(value: value, items: ['All', 'Advance', 'Final Bill', 'Cash', 'GPay', 'Account', 'Restaurant'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) { if (v != null) payment.value = v; }, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true))),
           const SizedBox(height: 16),
           const Text('Package type', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          ValueListenableBuilder<String>(
-            valueListenable: package,
-            builder: (_, value, __) {
-              return Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _packages.map((filter) {
-                  return ChoiceChip(
-                    label: Text(filter),
-                    selected: value == filter,
-                    onSelected: (_) => package.value = filter,
-                  );
-                }).toList(),
-              );
-            },
-          ),
+          ValueListenableBuilder<String>(valueListenable: package, builder: (_, value, __) => DropdownButtonFormField<String>(value: value, items: _packages.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) { if (v != null) package.value = v; }, decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true))),
         ],
       ),
     );
@@ -342,7 +305,11 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
 
   List<_IncomeRecord> _filteredRecords(List<_IncomeRecord> records) {
     return records.where((record) {
-      if (_paymentFilter != 'All' && record.type != _paymentFilter) return false;
+      if (_billSourceFilter == 'Restaurant Bill' && record.bill?['billSource'] != 'restaurant') return false;
+      if (_billSourceFilter == 'Homestay Bill' && record.bill?['billSource'] == 'restaurant') return false;
+      if (_billSourceFilter == 'Cancelled' && record.status != BookingStatus.cancelled) return false;
+      if (_billSourceFilter == 'Postponed' && record.status != BookingStatus.postponed) return false;
+      if (_paymentFilter != 'All' && record.type != _paymentFilter && record.mode != _paymentFilter) return false;
       if (_packageFilter != 'All' && record.packageName != _packageFilter) {
         return false;
       }
@@ -363,14 +330,15 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
     List<Map<String, dynamic>> bills,
     List<Map<String, dynamic>> confirmedQuotations,
     List<Map<String, dynamic>> restaurantBills,
+    List<Map<String, dynamic>> quotations,
   ) {
     final includeHomestay = _billSourceFilter != 'Restaurant Bill';
-    final includeRestaurant = _billSourceFilter != 'Homestay Bill';
+    final includeRestaurant = _billSourceFilter != 'Homestay Bill' && _billSourceFilter != 'Cancelled' && _billSourceFilter != 'Postponed';
 
     final records = <_IncomeRecord>[];
 
     if (includeHomestay) {
-      records.addAll(_paymentRecords(bills, confirmedQuotations));
+      records.addAll(_paymentRecords(bills, confirmedQuotations, quotations));
     }
 
     if (includeRestaurant) {
@@ -411,6 +379,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
               amount: amount,
               recordedBy: recordedBy,
               bill: billRow,
+              status: bill['status']?.toString(),
             ),
           );
         });
@@ -438,8 +407,10 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   List<_IncomeRecord> _paymentRecords(
     List<Map<String, dynamic>> bills,
     List<Map<String, dynamic>> confirmedQuotations,
+    List<Map<String, dynamic>> quotations,
   ) {
     final records = <_IncomeRecord>[];
+    final statusByQuotation = {for (final q in quotations) q['id']?.toString() ?? '': q['status']?.toString()};
     final activeConfirmationKeys = <String>{};
     final activeStayKeys = <String>{};
 
@@ -476,6 +447,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
             mode: payment.mode,
             amount: payment.amount,
             recordedBy: payment.recordedBy,
+            status: statusByQuotation[quotationId] ?? booking['status']?.toString() ?? _bookingIncomeStatus(booking),
           )));
     }
 
@@ -512,6 +484,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
               mode: payment.mode,
               amount: payment.amount,
               recordedBy: payment.recordedBy,
+              status: bill['status']?.toString(),
             )));
       }
       final payment = bill['payment'];
@@ -536,6 +509,7 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
               amount: amount,
               recordedBy: recordedBy,
               bill: bill,
+              status: bill['status']?.toString(),
             ));
           }
         });
@@ -547,6 +521,14 @@ class _TotalIncomeScreenState extends State<TotalIncomeScreen> {
   String _recordedBy(dynamic value, {required String fallback}) {
     final text = value?.toString().trim() ?? '';
     return text.isEmpty ? fallback : text;
+  }
+
+  String _bookingIncomeStatus(Map<String, dynamic> booking) {
+    final checkout = _dateValue(booking['checkOutDate']);
+    if (checkout != null && DateTime.now().isAfter(DateTime(checkout.year, checkout.month, checkout.day, 23, 59, 59))) {
+      return BookingStatus.completed;
+    }
+    return BookingStatus.confirmed;
   }
 
   String _stayKey(Map<String, dynamic> data) {
@@ -699,6 +681,7 @@ class _IncomeRecord {
     required this.amount,
     required this.recordedBy,
     this.bill,
+    this.status,
   });
   final String guestName;
   final String packageName;
@@ -708,6 +691,7 @@ class _IncomeRecord {
   final double amount;
   final String recordedBy;
   final Map<String, dynamic>? bill;
+  final String? status;
 }
 
 class _AdvancePayment {

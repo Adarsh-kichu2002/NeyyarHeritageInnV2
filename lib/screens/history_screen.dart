@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:neyyar_heritage/screens/bill_history_tab.dart';
 import 'package:neyyar_heritage/widgets/list_filter_dialog.dart';
 import 'quotation_history_tab.dart';
+import 'package:neyyar_heritage/utils/booking_status.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key, this.bottomPadding = 0});
@@ -18,6 +19,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   ListFilterValues _quotationFilter = const ListFilterValues();
   ListFilterValues _billFilter = const ListFilterValues();
+  String _quotationStatusFilter = 'All';
   Future<void> _openFilter(int tabIndex) async {
     final current = tabIndex == 0 ? _quotationFilter : _billFilter;
     final result = await showListFilterDialog(context, initial: current);
@@ -80,6 +82,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     _openFilter(index);
                                   },
                                 ),
+                                PopupMenuButton<String>(
+                                  tooltip: 'Filter quotation status',
+                                  icon: const Icon(Icons.more_vert, color: Colors.black),
+                                  onSelected: (value) => setState(() => _quotationStatusFilter = value),
+                                  itemBuilder: (_) => [
+                                    for (final entry in const [
+                                      ('Confirmed Bookings', 'confirmed'),
+                                      ('Completed', 'completed'),
+                                      ('Cancelled', 'cancelled'),
+                                      ('Postponed', 'postponed'),
+                                      ('All', 'All'),
+                                    ])
+                                      PopupMenuItem(value: entry.$2, child: Row(children: [
+                                        if (entry.$2 != 'All') ...[
+                                          Container(width: 12, height: 12, decoration: BoxDecoration(color: BookingStatus.color(entry.$2), shape: BoxShape.circle)),
+                                          const SizedBox(width: 8),
+                                        ],
+                                        Text(entry.$1),
+                                      ])),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -113,6 +136,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             customerName: _quotationFilter.customerName,
                             from: _quotationFilter.from,
                             to: _quotationFilter.to,
+                            statusFilter: _quotationStatusFilter,
                             bottomInset: widget.bottomPadding,
                           ),
                           BillHistoryTab(

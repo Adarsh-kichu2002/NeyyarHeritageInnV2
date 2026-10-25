@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 /// Restaurant payment screen — isolated from Homestay PaymentScreen.
-/// Admin can edit; staff can view only.
+/// Staff can record a payment once; admins can edit it afterward.
 class RestaurantPaymentScreen extends StatefulWidget {
   const RestaurantPaymentScreen({super.key});
 
@@ -18,6 +18,7 @@ class _RestaurantPaymentScreenState extends State<RestaurantPaymentScreen> {
   Map<String, dynamic> data = {};
   bool _initialized = false;
   bool _saving = false;
+  bool hasPayment = false;
   String role = 'staff';
 
   final gpayCtrl = TextEditingController(text: '0');
@@ -56,10 +57,11 @@ class _RestaurantPaymentScreenState extends State<RestaurantPaymentScreen> {
     data = Map<String, dynamic>.from(
       ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>,
     );
-    role = (data['role'] ?? 'staff').toString();
+    role = (data['role'] ?? 'staff').toString().trim().toLowerCase();
 
     final payment = data['payment'];
     if (payment is Map) {
+      hasPayment = true;
       gpayCtrl.text = _toInt(payment['gpay']).toString();
       cashCtrl.text = _toInt(payment['cash']).toString();
       accountCtrl.text = _toInt(payment['account']).toString();
@@ -73,7 +75,7 @@ class _RestaurantPaymentScreenState extends State<RestaurantPaymentScreen> {
     }
   }
 
-  bool get canEdit => role == 'admin';
+  bool get canEdit => role == 'admin' || !hasPayment;
 
   int get itemsTotal => _toInt(data['itemsTotal'] ?? data['grandTotal']);
   int get discount => _toInt(data['discount']);
@@ -114,17 +116,47 @@ class _RestaurantPaymentScreenState extends State<RestaurantPaymentScreen> {
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    await _db.collection('restaurant_bills').doc(billId).set({
-      'payment': paymentData,
-    }, SetOptions(merge: true));
+    try {
+      final billRef = _db.collection('restaurant_bills').doc('$billId');
+      await _db.runTransaction((transaction) async {
+        final billSnapshot = await transaction.get(billRef);
+        if (!billSnapshot.exists) {
+          throw StateError('This restaurant bill no longer exists.');
+        }
 
-    if (!mounted) return;
-    setState(() => _saving = false);
+        final existingPayment = billSnapshot.data()?['payment'];
+        if (role != 'admin' && existingPayment != null) {
+          throw StateError(
+            'This payment has already been saved. Only an admin can edit it.',
+          );
+        }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Payment saved successfully')),
-    );
-    Navigator.pop(context);
+        transaction.update(billRef, {'payment': paymentData});
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        hasPayment = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Payment saved successfully')),
+      );
+      Navigator.pop(context);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is StateError
+                ? error.message.toString()
+                : 'Could not save payment. Please try again.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _pickPaymentDate() async {
@@ -172,7 +204,7 @@ class _RestaurantPaymentScreenState extends State<RestaurantPaymentScreen> {
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
                 child: Text(
-                  'Only admin can edit restaurant payments.',
+                  'Payment is locked after saving. Only an admin can edit it.',
                   style: TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.bold,

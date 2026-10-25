@@ -78,6 +78,7 @@ class _RoomOccupancyScreenState extends State<RoomOccupancyScreen> {
 
   for (var doc in confirmSnapshot.docs) {
   final data = doc.data();
+  if (data['status'] == 'cancelled' || data['status'] == 'postponed') continue;
   final checkIn = data['checkInDate'];
 
   if (checkIn != null) {
@@ -384,6 +385,7 @@ Future<void> _loadConfirmedNames(DateTime date) async {
 
   for (var doc in snapshot.docs) {
     final data = doc.data();
+    if (data['status'] == 'cancelled' || data['status'] == 'postponed') continue;
     final name = data['customerName'];
     if (name != null && name.toString().isNotEmpty) {
       names.add(name);

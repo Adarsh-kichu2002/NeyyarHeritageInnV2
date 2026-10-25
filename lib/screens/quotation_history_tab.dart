@@ -6,6 +6,7 @@ import 'package:neyyar_heritage/utils/advance_payment_utils.dart';
 import 'package:neyyar_heritage/widgets/advance_payments_dialog.dart';
 import 'package:provider/provider.dart';
 import '../history/quotation_history_store.dart';
+import 'package:neyyar_heritage/utils/booking_status.dart';
 
 class QuotationHistoryTab extends StatefulWidget {
   const QuotationHistoryTab({
@@ -14,6 +15,7 @@ class QuotationHistoryTab extends StatefulWidget {
     this.from,
     this.to,
     this.bottomInset = 0,
+    this.statusFilter = 'All',
   });
 
   final String customerName;
@@ -22,6 +24,7 @@ class QuotationHistoryTab extends StatefulWidget {
 
   /// Scroll-only clearance for a parent floating nav (not structural padding).
   final double bottomInset;
+  final String statusFilter;
 
   @override
   State<QuotationHistoryTab> createState() =>
@@ -48,6 +51,10 @@ class _QuotationHistoryTabState
     final hasNameFilter = nameQuery.isNotEmpty;
 
     final filtered = store.quotations.where((q) {
+      final quotationId = q['id']?.toString() ?? '';
+      final confirmed = confirmStore.isConfirmed(quotationId);
+      final status = (q['status'] ?? (_isCompleted(q, isConfirmed: confirmed) ? BookingStatus.completed : confirmed ? BookingStatus.confirmed : '')).toString();
+      if (widget.statusFilter != 'All' && status != widget.statusFilter) return false;
       final DateTime? checkIn = _asDate(q['checkInDate']);
       if (checkIn == null) return false;
 
@@ -67,7 +74,6 @@ class _QuotationHistoryTabState
       // Date / name search bypasses the 30-day UI hide rule.
       if (hasDateFilter || hasNameFilter) return true;
 
-      final quotationId = q['id']?.toString() ?? '';
       final isConfirmed = confirmStore.isConfirmed(quotationId);
       return _isWithinUiRetention(q, isConfirmed: isConfirmed);
     }).toList();
@@ -116,8 +122,7 @@ class _QuotationHistoryTabState
   final q = filtered[i];
   final String quotationId = q['id'];
 
-  final bool isConfirmed =
-      confirmStore.isConfirmed(quotationId);
+  final bool isConfirmed = confirmStore.isConfirmed(quotationId);
 
   final bool isCompleted = _isCompleted(q, isConfirmed: isConfirmed);
   final confirmed = confirmStore.confirmedByQuotationId(quotationId);
@@ -149,13 +154,7 @@ class _QuotationHistoryTabState
   return DataRow(
     color: WidgetStateProperty.resolveWith<Color?>(
       (states) {
-        if (isConfirmed) {
-          return Colors.yellow.shade700;
-        }
-        if (isCompleted) {
-          return Colors.blue.shade200;
-        }
-        return null;
+        return BookingStatus.color((q['status'] ?? (isCompleted ? BookingStatus.completed : isConfirmed ? BookingStatus.confirmed : null))?.toString());
       },
     ),
     cells: [
@@ -234,14 +233,21 @@ class _QuotationHistoryTabState
               },
             ),
             IconButton(
-              icon: const Icon(Icons.edit,
-                  color: Colors.blue),
-              onPressed: () {
+              icon: const Icon(Icons.edit, color: Colors.blue),
+              tooltip: 'Edit',
+              onPressed: () async {
                 if (billGenerated) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Bill already generated')),
                   );
                   return;
+                }
+                final status = q['status']?.toString();
+                if (status == BookingStatus.cancelled || status == BookingStatus.postponed) {
+                  final restore = await _confirmRestoreBooking(context);
+                  if (!restore || !context.mounted) return;
+                  await context.read<QuotationHistoryStore>().updateStatus(quotationId, BookingStatus.confirmed);
+                  if (!context.mounted) return;
                 }
                 Navigator.pushNamed(
                   context,
@@ -253,18 +259,15 @@ class _QuotationHistoryTabState
                 );
               },
             ),
+            // IconButton(
+            //   icon: const Icon(Icons.cancel_outlined, color: Colors.red),
+            //   tooltip: 'Cancel Booking',
+            //   onPressed: () => _showBookingAction(context, quotationId),
+            // ),
             IconButton(
-              icon: const Icon(Icons.delete,
-                  color: Colors.red),
-              onPressed: () {
-                if (billGenerated) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Bill already generated')),
-                  );
-                  return;
-                }
-                _confirmDelete(context, quotationId);
-              },
+              icon: const Icon(Icons.delete, color: Colors.red),
+              tooltip: 'Delete quotation',
+              onPressed: billGenerated ? null : () => _confirmDelete(context, quotationId),
             ),
           ],
         ),
@@ -296,7 +299,7 @@ class _QuotationHistoryTabState
 
     await context.read<QuotationHistoryStore>().updateQuotation(
       quotationId,
-      firestoreFields,
+      {...firestoreFields, if (isNewConfirmation) 'status': BookingStatus.confirmed},
     );
 
     if (!context.mounted) return;
@@ -333,16 +336,21 @@ class _QuotationHistoryTabState
     final action = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Do you want to?'),
+        title: const Text('Booking Action'),
+        content: const Text('Do you want to cancel or postpone this booking?'),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, 'edit'),
-            child: const Text('Edit'),
+            child: const Text('Edit Advance'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, 'cancel'),
             child: const Text('Cancel Booking'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, 'postpone'),
+            child: const Text('Postpone'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -388,18 +396,60 @@ class _QuotationHistoryTabState
     }
 
     if (action == 'cancel') {
-      await confirmStore.removeByOriginalId(quotationId);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Booking cancelled')),
-      );
+      await _confirmBookingStatus(context, quotationId, BookingStatus.cancelled);
     }
+    if (action == 'postpone') {
+      await _confirmBookingStatus(context, quotationId, BookingStatus.postponed);
+    }
+  }
+
+  Future<void> _showBookingAction(BuildContext context, String quotationId) async {
+    final action = await showDialog<String>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('Booking Action'),
+      content: const Text('Do you want to cancel or postpone this booking?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, 'cancel'), child: const Text('CANCEL BOOKING', style: TextStyle(color: Colors.red))),
+        TextButton(onPressed: () => Navigator.pop(dialogContext, 'postpone'), child: const Text('POSTPONE', style: TextStyle(color: Colors.cyan))),
+        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('CLOSE')),
+      ],
+    ));
+    if (!context.mounted || action == null) return;
+    await _confirmBookingStatus(context, quotationId, action == 'cancel' ? BookingStatus.cancelled : BookingStatus.postponed);
+  }
+
+  Future<void> _confirmBookingStatus(BuildContext context, String quotationId, String status) async {
+    final isCancel = status == BookingStatus.cancelled;
+    final confirmed = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+      title: Text(isCancel ? 'Confirm cancellation' : 'Confirm postponement'),
+      content: Text(isCancel ? 'Cancel this booking? It will remain in quotation history.' : 'Postpone this booking? It will remain in quotation history.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Back')),
+        ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(isCancel ? 'Cancel Booking' : 'Postpone')),
+      ],
+    ));
+    if (confirmed != true || !context.mounted) return;
+    await context.read<QuotationHistoryStore>().updateStatus(quotationId, status);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isCancel ? 'Booking cancelled' : 'Booking postponed')));
+  }
+
+  Future<bool> _confirmRestoreBooking(BuildContext context) async {
+    return await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('Assign booking dates?'),
+      content: const Text('Confirm this booking again using its saved dates? It will return to Bookings and become available for room assignment.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+        ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('OK')),
+      ],
+    )) ?? false;
   }
 
   bool _isCompleted(
     Map<String, dynamic> q, {
     required bool isConfirmed,
   }) {
+    if (q['status'] == BookingStatus.cancelled || q['status'] == BookingStatus.postponed) return false;
+    if (q['status'] == BookingStatus.completed) return true;
     if (isConfirmed) return false;
 
     final checkOut = _asDate(q['checkOutDate']);

@@ -52,6 +52,10 @@ String formatReportDay(DateTime date) {
   return DateFormat('EEEE, dd MMM yyyy').format(date);
 }
 
+String formatReportLongDate(DateTime date) {
+  return DateFormat('EEEE d MMM yyyy').format(date);
+}
+
 String formatInputDate(DateTime date) {
   return DateFormat('dd/MM/yyyy').format(date);
 }

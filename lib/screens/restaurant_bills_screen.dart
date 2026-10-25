@@ -27,7 +27,7 @@ class _RestaurantBillsScreenState extends State<RestaurantBillsScreen> {
     _initialized = true;
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    role = (args?['role'] ?? 'staff').toString();
+    role = (args?['role'] ?? 'staff').toString().trim().toLowerCase();
   }
 
   Future<void> _openFilter() async {
@@ -79,13 +79,23 @@ class _RestaurantBillsScreenState extends State<RestaurantBillsScreen> {
   }
 
   bool _isPaid(Map<String, dynamic> bill) {
+    return _paidAmount(bill) > 0;
+  }
+
+  double _paidAmount(Map<String, dynamic> bill) {
     final payment = bill['payment'];
-    if (payment is! Map) return false;
+    if (payment is! Map) return 0;
     final paid = payment['paidAmount'];
-    final amount = paid is num
-        ? paid.toInt()
-        : int.tryParse(paid?.toString() ?? '') ?? 0;
-    return amount > 0;
+    if (paid is num) return paid.toDouble();
+    final parsed = double.tryParse(paid?.toString() ?? '');
+    if (parsed != null) return parsed;
+
+    double readAmount(dynamic value) => value is num
+        ? value.toDouble()
+        : double.tryParse(value?.toString() ?? '') ?? 0;
+    return readAmount(payment['gpay']) +
+        readAmount(payment['cash']) +
+        readAmount(payment['account']);
   }
 
   bool get _isAdmin => role == 'admin';
@@ -181,11 +191,13 @@ class _RestaurantBillsScreenState extends State<RestaurantBillsScreen> {
                                   label: Text('Total'),
                                   numeric: true,
                                 ),
+                                DataColumn(label: Text('Paid'), numeric: true),
                                 DataColumn(label: Text('Actions')),
                               ],
                               rows: List.generate(bills.length, (i) {
                                 final b = bills[i];
                                 final isPaid = _isPaid(b);
+                                final canEditBill = !isPaid || _isAdmin;
 
                                 return DataRow(
                                   color: WidgetStateProperty.resolveWith((_) {
@@ -211,6 +223,9 @@ class _RestaurantBillsScreenState extends State<RestaurantBillsScreen> {
                                       Text('₹${_money(b['grandTotal'])}'),
                                     ),
                                     DataCell(
+                                      Text('₹${_money(_paidAmount(b))}'),
+                                    ),
+                                    DataCell(
                                       Row(
                                         children: [
                                           /// VIEW
@@ -233,18 +248,18 @@ class _RestaurantBillsScreenState extends State<RestaurantBillsScreen> {
                                             },
                                           ),
 
-                                          /// EDIT (disabled after payment)
+                                          /// Paid bills remain editable by admins.
                                           IconButton(
-                                            tooltip: isPaid
-                                                ? 'Paid — cannot edit'
-                                                : 'Edit',
+                                            tooltip: canEditBill
+                                                ? 'Edit'
+                                                : 'Paid — staff cannot edit',
                                             icon: Icon(
                                               Icons.edit,
-                                              color: isPaid
-                                                  ? Colors.grey
-                                                  : Colors.blue,
+                                              color: canEditBill
+                                                  ? Colors.blue
+                                                  : Colors.grey,
                                             ),
-                                            onPressed: isPaid
+                                            onPressed: !canEditBill
                                                 ? null
                                                 : () {
                                                     Navigator.pushNamed(
